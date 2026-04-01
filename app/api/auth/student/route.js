@@ -1,11 +1,11 @@
 import { readDB, writeDB } from "@/lib/db";
 
 export async function POST(request) {
-  const { gmail, code, grade } = await request.json();
+  const { gmail, code, grade, lastName, firstName } = await request.json();
 
-  if (!gmail || !code || !grade) {
+  if (!gmail || !code || !grade || !lastName || !firstName) {
     return Response.json(
-      { error: "Gmail, ангийн код болон ангиа сонгоно уу" },
+      { error: "Бүх талбарыг бөглөнө үү" },
       { status: 400 }
     );
   }
@@ -28,6 +28,8 @@ export async function POST(request) {
   if (!student) {
     student = {
       gmail: normalizedGmail,
+      lastName: lastName.trim(),
+      firstName: firstName.trim(),
       code: code.toUpperCase().trim(),
       grade: Number(grade),
       teacherGmail: teacher.gmail,
@@ -37,6 +39,8 @@ export async function POST(request) {
     writeDB(db);
   } else {
     student.grade = Number(grade);
+    student.lastName = lastName.trim();
+    student.firstName = firstName.trim();
     writeDB(db);
   }
 

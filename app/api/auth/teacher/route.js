@@ -8,15 +8,16 @@ export async function POST(request) {
   }
 
   const db = readDB();
-  const teacher = db.teachers.find(
+  let teacher = db.teachers.find(
     (t) => t.gmail === gmail.toLowerCase().trim()
   );
 
   if (!teacher) {
-    return Response.json(
-      { error: "Таны gmail зөвшөөрөгдөөгүй байна. Админтай холбогдоно уу." },
-      { status: 403 }
-    );
+    const name = gmail.split("@")[0];
+    const newTeacher = { gmail: gmail.toLowerCase().trim(), name, code: null };
+    db.teachers.push(newTeacher);
+    writeDB(db);
+    teacher = newTeacher;
   }
 
   if (!teacher.code) {
