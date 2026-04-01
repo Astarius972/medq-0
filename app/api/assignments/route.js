@@ -1,4 +1,4 @@
-import { readDB, writeDB } from "@/lib/db";
+import supabase from "@/lib/supabase";
 import { randomUUID } from "crypto";
 
 export async function GET(request) {
@@ -7,56 +7,90 @@ export async function GET(request) {
   const studentTeacherGmail = searchParams.get("studentTeacherGmail");
   const grade = searchParams.get("grade");
 
-  const db = readDB();
-  const assignments = db.assignments || [];
-  const submissions = db.submissions || [];
-
   if (teacherGmail) {
-    const subCounts = submissions.reduce((m, s) => {
-      m[s.assignmentId] = (m[s.assignmentId] || 0) + 1;
+    const { data: assignments } = await supabase
+      .from("assignments")
+      .select("*")
+      .eq("teacher_gmail", teacherGmail)
+      .order("created_at", { ascending: false });
+
+    const { data: submissions } = await supabase.from("submissions").select("assignment_id");
+    const subCounts = (submissions || []).reduce((m, s) => {
+      m[s.assignment_id] = (m[s.assignment_id] || 0) + 1;
       return m;
     }, {});
-    const result = assignments
-      .filter((a) => a.teacherGmail === teacherGmail)
-      .map((a) => ({ ...a, submissionCount: subCounts[a.id] || 0 }))
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return Response.json({ assignments: result });
+
+    return Response.json({
+      assignments: (assignments || []).map(a => ({
+        ...toAssignmentJS(a),
+        submissionCount: subCounts[a.id] || 0,
+      })),
+    });
   }
 
   if (studentTeacherGmail && grade) {
-    const result = assignments.filter(
-      (a) => a.teacherGmail === studentTeacherGmail && a.grade === Number(grade)
-    );
-    return Response.json({ assignments: result });
+    const { data: assignments } = await supabase
+      .from("assignments")
+      .select("*")
+      .eq("teacher_gmail", studentTeacherGmail)
+      .eq("grade", Number(grade));
+    return Response.json({ assignments: (assignments || []).map(toAssignmentJS) });
+  }
+
+  if (grade) {
+    // All @olula.edu.mn teachers' assignments for this grade
+    const { data: teachers } = await supabase
+      .from("teachers")
+      .select("gmail");
+    const teacherGmails = (teachers || [])
+      .map(t => t.gmail)
+      .filter(g => g.endsWith("@olula.edu.mn"));
+
+    const { data: assignments } = await supabase
+      .from("assignments")
+      .select("*")
+      .in("teacher_gmail", teacherGmails)
+      .eq("grade", Number(grade));
+    return Response.json({ assignments: (assignments || []).map(toAssignmentJS) });
   }
 
   return Response.json({ assignments: [] });
 }
 
 export async function POST(request) {
-  const { teacherGmail, grade, title, description, deadline, points } =
-    await request.json();
+  const { teacherGmail, grade, title, description, deadline, points } = await request.json();
 
   if (!teacherGmail || !grade || !title || !deadline) {
     return Response.json({ error: "Бүх талбарыг бөглөнө үү" }, { status: 400 });
   }
 
-  const db = readDB();
-  if (!db.assignments) db.assignments = [];
+  const { data: assignment } = await supabase
+    .from("assignments")
+    .insert({
+      id: randomUUID(),
+      teacher_gmail: teacherGmail,
+      grade: Number(grade),
+      title: title.trim(),
+      description: (description || "").trim(),
+      deadline,
+      points: Number(points) || 100,
+      created_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
 
-  const assignment = {
-    id: randomUUID(),
-    teacherGmail,
-    grade: Number(grade),
-    title: title.trim(),
-    description: (description || "").trim(),
-    deadline,
-    points: Number(points) || 100,
-    createdAt: new Date().toISOString(),
+  return Response.json({ assignment: toAssignmentJS(assignment) });
+}
+
+function toAssignmentJS(a) {
+  return {
+    id: a.id,
+    teacherGmail: a.teacher_gmail,
+    grade: a.grade,
+    title: a.title,
+    description: a.description,
+    deadline: a.deadline,
+    points: a.points,
+    createdAt: a.created_at,
   };
-
-  db.assignments.push(assignment);
-  writeDB(db);
-
-  return Response.json({ assignment });
 }

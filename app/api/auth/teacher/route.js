@@ -1,29 +1,71 @@
-import { readDB, writeDB, generateCode } from "@/lib/db";
+import supabase from "@/lib/supabase";
+import { generateCode } from "@/lib/db";
+
+const THREE_MONTHS_MS = 3 * 30 * 24 * 60 * 60 * 1000;
+
+function isCodeExpired(ts) {
+  if (!ts) return true;
+  return Date.now() - new Date(ts).getTime() > THREE_MONTHS_MS;
+}
 
 export async function POST(request) {
-  const { gmail } = await request.json();
+  const { gmail, password } = await request.json();
 
-  if (!gmail) {
-    return Response.json({ error: "Gmail хаяг оруулна уу" }, { status: 400 });
+  if (!gmail || !password) {
+    return Response.json({ error: "И-мэйл болон нууц үг оруулна уу" }, { status: 400 });
   }
 
-  const db = readDB();
-  let teacher = db.teachers.find(
-    (t) => t.gmail === gmail.toLowerCase().trim()
-  );
+  const normalized = gmail.toLowerCase().trim();
+
+  if (!normalized.endsWith("@olula.edu.mn")) {
+    return Response.json(
+      { error: "Зөвхөн @olula.edu.mn хаягтай багш нэвтрэх боломжтой" },
+      { status: 403 }
+    );
+  }
+
+  const { data: teacher } = await supabase
+    .from("teachers")
+    .select("*")
+    .eq("gmail", normalized)
+    .maybeSingle();
 
   if (!teacher) {
-    const name = gmail.split("@")[0];
-    const newTeacher = { gmail: gmail.toLowerCase().trim(), name, code: null };
-    db.teachers.push(newTeacher);
-    writeDB(db);
-    teacher = newTeacher;
+    const name = normalized.split("@")[0];
+    const { data: created } = await supabase
+      .from("teachers")
+      .insert({
+        gmail: normalized,
+        name,
+        password: password.trim(),
+        code: generateCode(),
+        code_created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    return Response.json({ teacher: { gmail: created.gmail, name: created.name, code: created.code } });
   }
 
-  if (!teacher.code) {
-    teacher.code = generateCode();
-    writeDB(db);
+  if (teacher.password && teacher.password !== password.trim()) {
+    return Response.json({ error: "Нууц үг буруу байна" }, { status: 401 });
   }
 
-  return Response.json({ teacher });
+  const updates = {};
+  if (!teacher.password) updates.password = password.trim();
+  if (isCodeExpired(teacher.code_created_at)) {
+    updates.code = generateCode();
+    updates.code_created_at = new Date().toISOString();
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await supabase.from("teachers").update(updates).eq("gmail", normalized);
+  }
+
+  return Response.json({
+    teacher: {
+      gmail: teacher.gmail,
+      name: teacher.name,
+      code: updates.code || teacher.code,
+    },
+  });
 }

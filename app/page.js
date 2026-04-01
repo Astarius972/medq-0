@@ -4,15 +4,32 @@ import { useRouter } from "next/navigation";
 
 export default function Home() {
   const [role, setRole] = useState("student");
+  // common
   const [gmail, setGmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
+
+  // teacher
+  const [password, setPassword] = useState("");
+
+  // student — two sub-modes
+  const [studentMode, setStudentMode] = useState("login"); // "login" | "register"
+  const [personalCode, setPersonalCode] = useState("");
   const [code, setCode] = useState("");
   const [grade, setGrade] = useState(null);
   const [gradeOpen, setGradeOpen] = useState(false);
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const router = useRouter();
+  const [newPersonalCode, setNewPersonalCode] = useState(""); // shown after register
+
+  // parent
+  const [studentPersonalCode, setStudentPersonalCode] = useState("");
+
+  function resetFields() {
+    setGmail(""); setPassword(""); setPersonalCode(""); setCode(""); setGrade(null);
+    setLastName(""); setFirstName(""); setStudentPersonalCode(""); setError(""); setNewPersonalCode("");
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -23,36 +40,57 @@ export default function Home() {
         const res = await fetch("/api/auth/teacher", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gmail }),
+          body: JSON.stringify({ gmail, password }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         sessionStorage.setItem("user", JSON.stringify({ ...data.teacher, role: "teacher" }));
         router.push("/teacher");
+
       } else if (role === "student") {
-        const res = await fetch("/api/auth/student", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gmail, code, grade, lastName, firstName }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        sessionStorage.setItem(
-          "user",
-          JSON.stringify({ ...data.student, role: "student", teacherName: data.teacher.name })
-        );
-        router.push("/student");
+        if (studentMode === "login") {
+          const res = await fetch("/api/auth/student", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ gmail, personalCode }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+          sessionStorage.setItem(
+            "user",
+            JSON.stringify({ ...data.student, role: "student", teacherName: data.teacher.name })
+          );
+          router.push("/student");
+        } else {
+          // register
+          const res = await fetch("/api/auth/student", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ gmail, code, grade, lastName, firstName }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+          // Show personal code before redirecting
+          setNewPersonalCode(data.personalCode);
+        }
+
       } else {
+        // parent
         const res = await fetch("/api/auth/parent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gmail, code }),
+          body: JSON.stringify({ gmail, studentPersonalCode }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         sessionStorage.setItem(
           "user",
-          JSON.stringify({ ...data.parent, role: "parent", teacherName: data.teacher.name, children: data.children })
+          JSON.stringify({
+            ...data.parent,
+            role: "parent",
+            teacherName: data.teacher.name,
+            student: data.student,
+          })
         );
         router.push("/parent");
       }
@@ -63,84 +101,106 @@ export default function Home() {
     }
   }
 
+  function continueToStudent() {
+    const stored = sessionStorage.getItem("user");
+    if (!stored) {
+      // re-fetch to get the user object — just redirect to student page; student page will reload
+      router.push("/student");
+    } else {
+      router.push("/student");
+    }
+  }
+
+  // After registration, set session and go
+  async function afterRegister() {
+    // We need to log in with the new personalCode
+    const res = await fetch("/api/auth/student", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gmail, personalCode: newPersonalCode }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      sessionStorage.setItem(
+        "user",
+        JSON.stringify({ ...data.student, role: "student", teacherName: data.teacher.name })
+      );
+    }
+    router.push("/student");
+  }
+
   const roles = [
     {
-      value: "student",
-      label: "Сурагч",
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" />
-        </svg>
-      ),
+      value: "student", label: "Сурагч",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" /></svg>,
     },
     {
-      value: "teacher",
-      label: "Багш",
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-        </svg>
-      ),
+      value: "teacher", label: "Багш",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>,
     },
     {
-      value: "parent",
-      label: "Эцэг эх",
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-        </svg>
-      ),
+      value: "parent", label: "Эцэг эх",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" /></svg>,
     },
   ];
 
-  const submitLabel = {
-    student: "Сурагчаар нэвтрэх",
-    teacher: "Багшаар нэвтрэх",
-    parent: "Эцэг эхээр нэвтрэх",
-  };
+  const inputBox = (children) => (
+    <div className="flex items-center gap-3 rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
+      {children}
+    </div>
+  );
+
+  // ── Personal code reveal screen ──
+  if (newPersonalCode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6 py-12"
+        style={{ background: "linear-gradient(135deg,#e0f7fa 0%,#f0fdfd 60%,#ffffff 100%)" }}>
+        <div className="bg-white rounded-3xl shadow-xl p-12 text-center" style={{ maxWidth: 480, width: "100%" }}>
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6"
+            style={{ background: "linear-gradient(135deg,#06b6d4,#0891b2)" }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
+          </div>
+          <h2 className="text-2xl font-black text-gray-900 mb-2">Бүртгэл амжилттай!</h2>
+          <p className="text-gray-500 mb-6">Дараа нэвтрэхдээ энэ <strong>хувийн кодоо</strong> ашиглана уу. Эцэг эхдээ ч мэдэгдэж болно.</p>
+          <div className="rounded-2xl py-6 px-8 mb-6" style={{ background: "#f0fdff", border: "2px dashed #06b6d4" }}>
+            <p className="text-xs text-gray-400 mb-1 uppercase tracking-widest">Таны хувийн код</p>
+            <p className="text-4xl font-black tracking-widest" style={{ color: "#06b6d4", letterSpacing: "0.2em" }}>{newPersonalCode}</p>
+          </div>
+          <p className="text-xs text-gray-400 mb-6">Энэ кодыг хадгалаарай — эцэг эхийн нэвтрэлтэд ч ашиглагдана.</p>
+          <button onClick={afterRegister}
+            className="w-full py-4 rounded-xl text-white font-bold text-lg"
+            style={{ background: "#06b6d4" }}>
+            Үргэлжлүүлэх →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-6 py-12"
-      style={{ background: "linear-gradient(135deg, #e0f7fa 0%, #f0fdfd 60%, #ffffff 100%)" }}
-    >
+    <div className="min-h-screen flex items-center justify-center px-6 py-12"
+      style={{ background: "linear-gradient(135deg,#e0f7fa 0%,#f0fdfd 60%,#ffffff 100%)" }}>
       <div className="w-full max-w-6xl flex flex-col lg:flex-row items-center lg:items-stretch gap-12 lg:gap-20">
 
         {/* Left — Branding */}
         <div className="flex flex-col items-center lg:items-start justify-center lg:flex-1">
-          <div
-            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-8"
-            style={{ background: "linear-gradient(135deg, #4dd0e1 0%, #f97316 100%)" }}
-          >
+          <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-8"
+            style={{ background: "linear-gradient(135deg,#4dd0e1 0%,#f97316 100%)" }}>
             <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
               <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" />
             </svg>
           </div>
-
           <h1 className="text-5xl lg:text-6xl font-black text-gray-900 mb-4 text-center lg:text-left leading-tight">
             Анги платформ<span style={{ color: "#06b6d4" }}>.</span>
           </h1>
           <p className="text-gray-500 text-xl lg:text-2xl mb-10 max-w-sm text-center lg:text-left leading-relaxed">
             Багш сурагчийн харилцаа холбоог хялбаршуулсан орчин үеийн сургалтын систем
           </p>
-
           <div className="flex flex-col gap-4 w-full max-w-sm">
             {[
-              {
-                bg: "#fce4ec", fill: "#e91e63",
-                icon: <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z" />,
-                title: "Даалгавар илгээх", sub: "Цаг алдалгүй даалгавар оноох, илгээх",
-              },
-              {
-                bg: "#e8eaf6", fill: "#7986cb",
-                icon: <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />,
-                title: "Шууд мессеж", sub: "Багш сурагч хоорондоо шууд харилцах",
-              },
-              {
-                bg: "#fff8e1", fill: "#fbc02d",
-                icon: <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />,
-                title: "Үнэлгээ өгөх", sub: "Ажлыг үнэлж, сэтгэгдэл үлдээх",
-              },
+              { bg:"#fce4ec", fill:"#e91e63", icon:<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/>, title:"Даалгавар илгээх", sub:"Цаг алдалгүй даалгавар оноох, илгээх" },
+              { bg:"#e8eaf6", fill:"#7986cb", icon:<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>, title:"Шууд мессеж", sub:"Багш сурагч хоорондоо шууд харилцах" },
+              { bg:"#fff8e1", fill:"#fbc02d", icon:<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>, title:"Үнэлгээ өгөх", sub:"Ажлыг үнэлж, сэтгэгдэл үлдээх" },
             ].map((f) => (
               <div key={f.title} className="bg-white rounded-2xl px-7 py-6 flex items-center gap-5 shadow-sm">
                 <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: f.bg }}>
@@ -165,146 +225,136 @@ export default function Home() {
             <p className="text-base font-medium text-gray-600 mb-3">Дүр сонгох</p>
             <div className="flex rounded-xl overflow-hidden border border-gray-200 mb-7">
               {roles.map((r) => (
-                <button
-                  key={r.value}
-                  type="button"
-                  onClick={() => { setRole(r.value); setError(""); setCode(""); setGrade(null); setLastName(""); setFirstName(""); }}
+                <button key={r.value} type="button"
+                  onClick={() => { setRole(r.value); resetFields(); }}
                   className="flex-1 flex items-center justify-center gap-2 py-4 text-lg font-semibold transition-colors"
-                  style={
-                    role === r.value
-                      ? { background: "#06b6d4", color: "white" }
-                      : { background: "white", color: "#6b7280" }
-                  }
-                >
-                  {r.icon}
-                  {r.label}
+                  style={role === r.value ? { background: "#06b6d4", color: "white" } : { background: "white", color: "#6b7280" }}>
+                  {r.icon}{r.label}
                 </button>
               ))}
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
 
-              {/* Code — student & parent */}
-              {(role === "student" || role === "parent") && (
-                <div>
-                  <label className="block text-base font-medium text-gray-600 mb-2">
-                    {role === "parent" ? "Сурагчийн ангийн код" : "Ангийн код"}
-                  </label>
-                  <div className="flex items-center gap-3 rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af">
-                      <path d="M17 8C8 10 5.9 16.17 3.82 22H5.71c.5-1.53 1.14-3 2.29-4.07L12 22l4-4-1-1-2.59 2.59C11.23 16.4 11.8 13.47 17 8z" />
-                    </svg>
-                    <input
-                      type="text"
-                      placeholder="Ангийн код (жш: ABC123)"
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                      className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400 uppercase"
-                      required
-                    />
-                  </div>
+              {/* ── STUDENT sub-mode toggle ── */}
+              {role === "student" && (
+                <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                  {[{ v:"login", l:"Нэвтрэх" }, { v:"register", l:"Шинэ бүртгэл" }].map(({ v, l }) => (
+                    <button key={v} type="button"
+                      onClick={() => { setStudentMode(v); setError(""); }}
+                      className="flex-1 py-3 text-base font-semibold transition-colors"
+                      style={studentMode === v ? { background: "#e0f7fa", color: "#0891b2" } : { background: "white", color: "#9ca3af" }}>
+                      {l}
+                    </button>
+                  ))}
                 </div>
               )}
 
-              {/* Grade — student only */}
-              {role === "student" && (
+              {/* ── STUDENT LOGIN: personalCode ── */}
+              {role === "student" && studentMode === "login" && (
+                <div>
+                  <label className="block text-base font-medium text-gray-600 mb-2">Хувийн код</label>
+                  {inputBox(<>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                    <input type="text" placeholder="Бүртгэлийн кодоо оруулна уу (жш: ABC123)"
+                      value={personalCode} onChange={e => setPersonalCode(e.target.value)}
+                      className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400 uppercase" required />
+                  </>)}
+                </div>
+              )}
+
+              {/* ── STUDENT REGISTER: class code + grade + name ── */}
+              {role === "student" && studentMode === "register" && (<>
+                <div>
+                  <label className="block text-base font-medium text-gray-600 mb-2">Ангийн код</label>
+                  {inputBox(<>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af"><path d="M17 8C8 10 5.9 16.17 3.82 22H5.71c.5-1.53 1.14-3 2.29-4.07L12 22l4-4-1-1-2.59 2.59C11.23 16.4 11.8 13.47 17 8z"/></svg>
+                    <input type="text" placeholder="Ангийн код (жш: ABC123)"
+                      value={code} onChange={e => setCode(e.target.value)}
+                      className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400 uppercase" required />
+                  </>)}
+                </div>
                 <div>
                   <label className="block text-base font-medium text-gray-600 mb-2">Анги сонгох</label>
-                  <button
-                    type="button"
-                    onClick={() => setGradeOpen((o) => !o)}
-                    className="w-full flex items-center justify-between rounded-xl px-5 py-4"
-                    style={{ background: "#f3f4f6" }}
-                  >
-                    <span className={`text-lg ${grade ? "text-gray-700 font-semibold" : "text-gray-400"}`}>
-                      {grade ? `${grade}-р анги` : "Анги сонгох..."}
-                    </span>
-                    <svg
-                      width="22" height="22" viewBox="0 0 24 24" fill="#9ca3af"
-                      style={{ transform: gradeOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
-                    >
+                  <button type="button" onClick={() => setGradeOpen(o => !o)}
+                    className="w-full flex items-center justify-between rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
+                    <span className={`text-lg ${grade ? "text-gray-700 font-semibold" : "text-gray-400"}`}>{grade ? `${grade}-р анги` : "Анги сонгох..."}</span>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="#9ca3af"
+                      style={{ transform: gradeOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
                       <path d="M7 10l5 5 5-5z" />
                     </svg>
                   </button>
                   {gradeOpen && (
                     <div className="grid grid-cols-6 gap-2 mt-2">
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
-                        <button
-                          key={g}
-                          type="button"
-                          onClick={() => { setGrade(g); setGradeOpen(false); }}
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(g => (
+                        <button key={g} type="button" onClick={() => { setGrade(g); setGradeOpen(false); }}
                           className="py-3 rounded-lg text-lg font-semibold transition-colors"
-                          style={grade === g ? { background: "#06b6d4", color: "white" } : { background: "#f3f4f6", color: "#6b7280" }}
-                        >
+                          style={grade === g ? { background: "#06b6d4", color: "white" } : { background: "#f3f4f6", color: "#6b7280" }}>
                           {g}
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
-              )}
-
-              {/* Овог Нэр — student only */}
-              {role === "student" && (
                 <div className="flex gap-3">
                   <div className="flex-1">
                     <label className="block text-base font-medium text-gray-600 mb-2">Овог</label>
-                    <div className="flex items-center gap-3 rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
-                      <input
-                        type="text"
-                        placeholder="Овог"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400"
-                        required
-                      />
-                    </div>
+                    {inputBox(<input type="text" placeholder="Овог" value={lastName} onChange={e => setLastName(e.target.value)}
+                      className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400" required />)}
                   </div>
                   <div className="flex-1">
                     <label className="block text-base font-medium text-gray-600 mb-2">Нэр</label>
-                    <div className="flex items-center gap-3 rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
-                      <input
-                        type="text"
-                        placeholder="Нэр"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400"
-                        required
-                      />
-                    </div>
+                    {inputBox(<input type="text" placeholder="Нэр" value={firstName} onChange={e => setFirstName(e.target.value)}
+                      className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400" required />)}
                   </div>
                 </div>
+              </>)}
+
+              {/* ── PARENT: studentPersonalCode ── */}
+              {role === "parent" && (
+                <div>
+                  <label className="block text-base font-medium text-gray-600 mb-2">Сурагчийн хувийн код</label>
+                  {inputBox(<>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                    <input type="text" placeholder="Хүүхдийн хувийн код"
+                      value={studentPersonalCode} onChange={e => setStudentPersonalCode(e.target.value)}
+                      className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400 uppercase" required />
+                  </>)}
+                </div>
               )}
 
-              {/* Gmail */}
+              {/* ── TEACHER: password ── */}
+              {role === "teacher" && (
+                <div>
+                  <label className="block text-base font-medium text-gray-600 mb-2">Нууц үг</label>
+                  {inputBox(<>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                    <input type="password" placeholder="Нууц үгээ оруулна уу"
+                      value={password} onChange={e => setPassword(e.target.value)}
+                      className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400" required />
+                  </>)}
+                  <p className="text-xs text-gray-400 mt-1">Анх нэвтрэх үед нууц үг тохируулагдана</p>
+                </div>
+              )}
+
+              {/* ── Email (all roles) ── */}
               <div>
                 <label className="block text-base font-medium text-gray-600 mb-2">И-мэйл хаяг</label>
-                <div className="flex items-center gap-3 rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af">
-                    <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
-                  </svg>
-                  <input
-                    type="email"
-                    placeholder="example@olula.edu.mn"
-                    value={gmail}
-                    onChange={(e) => setGmail(e.target.value)}
-                    className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400"
-                    required
-                  />
-                </div>
+                {inputBox(<>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                  <input type="email"
+                    placeholder={role === "teacher" ? "bagsh@olula.edu.mn" : "example@gmail.com"}
+                    value={gmail} onChange={e => setGmail(e.target.value)}
+                    className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400" required />
+                </>)}
               </div>
 
-              {error && (
-                <p className="text-red-500 text-base text-center bg-red-50 rounded-xl py-3 px-4">{error}</p>
-              )}
+              {error && <p className="text-red-500 text-base text-center bg-red-50 rounded-xl py-3 px-4">{error}</p>}
 
-              <button
-                type="submit"
-                disabled={loading}
+              <button type="submit" disabled={loading}
                 className="w-full py-5 rounded-xl text-white font-bold text-lg transition-opacity hover:opacity-90 disabled:opacity-60"
-                style={{ background: "#06b6d4" }}
-              >
-                {loading ? "Түр хүлээнэ үү..." : submitLabel[role]}
+                style={{ background: "#06b6d4" }}>
+                {loading ? "Түр хүлээнэ үү..." : role === "student" && studentMode === "register" ? "Бүртгүүлэх" : "Нэвтрэх"}
               </button>
             </form>
           </div>

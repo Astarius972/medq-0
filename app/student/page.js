@@ -17,6 +17,8 @@ export default function StudentDashboard() {
   const [submitError, setSubmitError] = useState("");
   const fileInputRef = useRef(null);
 
+  const [allTeachers, setAllTeachers] = useState([]);
+  const [selectedTeacherGmail, setSelectedTeacherGmail] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -28,12 +30,17 @@ export default function StudentDashboard() {
     const parsed = JSON.parse(stored);
     if (parsed.role !== "student") { router.push("/"); return; }
     setUser(parsed);
+    setSelectedTeacherGmail(parsed.teacherGmail);
   }, [router]);
+
+  useEffect(() => {
+    fetch("/api/teachers").then(r => r.json()).then(d => setAllTeachers(d.teachers || []));
+  }, []);
 
   useEffect(() => {
     if (!user) return;
     Promise.all([
-      fetch(`/api/assignments?studentTeacherGmail=${encodeURIComponent(user.teacherGmail)}&grade=${user.grade}`).then(r => r.json()),
+      fetch(`/api/assignments?grade=${user.grade}`).then(r => r.json()),
       fetch(`/api/submissions?studentGmail=${encodeURIComponent(user.gmail)}`).then(r => r.json()),
     ]).then(([aData, sData]) => {
       setAssignments(aData.assignments || []);
@@ -41,21 +48,23 @@ export default function StudentDashboard() {
     });
   }, [user]);
 
-  const loadChat = useCallback((gmail, teacherGmail) => {
-    fetch(`/api/chat?studentGmail=${encodeURIComponent(gmail)}&teacherGmail=${encodeURIComponent(teacherGmail)}`)
+  const loadChat = useCallback((studentGmail, teacherGmail) => {
+    if (!teacherGmail) return;
+    fetch(`/api/chat?studentGmail=${encodeURIComponent(studentGmail)}&teacherGmail=${encodeURIComponent(teacherGmail)}`)
       .then(r => r.json()).then(d => setChatMessages(d.messages || []));
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    loadChat(user.gmail, user.teacherGmail);
-  }, [user, loadChat]);
+    if (!user || !selectedTeacherGmail) return;
+    setChatMessages([]);
+    loadChat(user.gmail, selectedTeacherGmail);
+  }, [user, selectedTeacherGmail, loadChat]);
 
   useEffect(() => {
-    if (!user || activeTab !== "chat") return;
-    const iv = setInterval(() => loadChat(user.gmail, user.teacherGmail), 5000);
+    if (!user || !selectedTeacherGmail || activeTab !== "chat") return;
+    const iv = setInterval(() => loadChat(user.gmail, selectedTeacherGmail), 5000);
     return () => clearInterval(iv);
-  }, [user, activeTab, loadChat]);
+  }, [user, selectedTeacherGmail, activeTab, loadChat]);
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
@@ -84,11 +93,11 @@ export default function StudentDashboard() {
 
   async function handleSendChat(e) {
     e.preventDefault();
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() || !selectedTeacherGmail) return;
     setChatSending(true);
     try {
       const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromGmail: user.gmail, toGmail: user.teacherGmail, text: chatInput }) });
+        body: JSON.stringify({ fromGmail: user.gmail, toGmail: selectedTeacherGmail, text: chatInput }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setChatMessages(prev => [...prev, data.message]);
@@ -116,8 +125,10 @@ export default function StudentDashboard() {
   const unreadChat = (() => {
     if (!chatMessages.length) return false;
     const sorted = [...chatMessages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt));
-    return sorted[sorted.length - 1].fromGmail === user.teacherGmail;
+    return sorted[sorted.length - 1].fromGmail !== user.gmail;
   })();
+
+  const selectedTeacher = allTeachers.find(t => t.gmail === selectedTeacherGmail);
 
   const NAV = [
     { key: "dashboard", label: "Хяналтын самбар", badge: null,
@@ -495,36 +506,74 @@ export default function StudentDashboard() {
 
           {/* ── CHAT ── */}
           {activeTab === "chat" && (
-            <div style={{ height: "100%", display: "flex", flexDirection: "column", maxWidth: 680, margin: "0 auto", width: "100%" }}>
-              <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
-                {chatMessages.length === 0 && (
-                  <p style={{ textAlign: "center", color: "#d1d5db", fontSize: 13, marginTop: 48 }}>Мессеж байхгүй. Эхний мессежийг илгээнэ үү.</p>
+            <div style={{ height: "100%", display: "flex" }}>
+              {/* Teacher list */}
+              <div style={{ width: 220, borderRight: "1px solid #f1f5f9", overflowY: "auto", background: "white", flexShrink: 0 }}>
+                <p style={{ margin: 0, padding: "14px 16px 10px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Багш нар</p>
+                {allTeachers.length === 0 && (
+                  <p style={{ fontSize: 12, color: "#d1d5db", textAlign: "center", padding: "12px 8px", margin: 0 }}>Багш олдсонгүй</p>
                 )}
-                {[...chatMessages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt)).map(msg => {
-                  const isMe = msg.fromGmail === user.gmail;
+                {allTeachers.map(t => {
+                  const active = t.gmail === selectedTeacherGmail;
                   return (
-                    <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                      <div style={{ maxWidth: 320, padding: "10px 14px", borderRadius: 18, fontSize: 14,
-                        borderBottomRightRadius: isMe ? 4 : 18, borderBottomLeftRadius: isMe ? 18 : 4,
-                        background: isMe ? "#06b6d4" : "white", color: isMe ? "white" : "#111827",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <p style={{ margin: 0 }}>{msg.text}</p>
-                        <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.6 }}>{relTime(msg.sentAt)}</p>
+                    <button key={t.gmail} onClick={() => setSelectedTeacherGmail(t.gmail)}
+                      style={{ width: "100%", textAlign: "left", border: "none", cursor: "pointer", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10,
+                        background: active ? "#e0f7fa" : "transparent", borderLeft: active ? "3px solid #06b6d4" : "3px solid transparent" }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: active ? "#06b6d4" : "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", color: active ? "white" : "#6b7280", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                        {t.name[0].toUpperCase()}
                       </div>
-                    </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: active ? "#0891b2" : "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.gmail.split("@")[0]}</p>
+                      </div>
+                    </button>
                   );
                 })}
-                <div ref={chatBottomRef} />
               </div>
-              <form onSubmit={handleSendChat} style={{ padding: "14px 24px", borderTop: "1px solid #f1f5f9", display: "flex", gap: 10, background: "white", flexShrink: 0 }}>
-                <input type="text" placeholder="Мессеж бичих..." value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  style={{ flex: 1, padding: "10px 16px", borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 14, outline: "none", color: "#111827", background: "#f9fafb" }} />
-                <button type="submit" disabled={chatSending || !chatInput.trim()}
-                  style={{ background: "#06b6d4", color: "white", border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, padding: "10px 20px", borderRadius: 12, opacity: (chatSending || !chatInput.trim()) ? 0.5 : 1 }}>
-                  Илгээх
-                </button>
-              </form>
+
+              {/* Messages */}
+              <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                {selectedTeacher && (
+                  <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f5f9", background: "white", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "#e0f7fa", display: "flex", alignItems: "center", justifyContent: "center", color: "#0891b2", fontWeight: 800, fontSize: 13 }}>
+                      {selectedTeacher.name[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{selectedTeacher.name}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{selectedTeacher.gmail}</p>
+                    </div>
+                  </div>
+                )}
+                <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {chatMessages.length === 0 && (
+                    <p style={{ textAlign: "center", color: "#d1d5db", fontSize: 13, marginTop: 48 }}>Мессеж байхгүй. Эхний мессежийг илгээнэ үү.</p>
+                  )}
+                  {[...chatMessages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt)).map(msg => {
+                    const isMe = msg.fromGmail === user.gmail;
+                    return (
+                      <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                        <div style={{ maxWidth: 320, padding: "10px 14px", borderRadius: 18, fontSize: 14,
+                          borderBottomRightRadius: isMe ? 4 : 18, borderBottomLeftRadius: isMe ? 18 : 4,
+                          background: isMe ? "#06b6d4" : "white", color: isMe ? "white" : "#111827",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          <p style={{ margin: 0 }}>{msg.text}</p>
+                          <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.6 }}>{relTime(msg.sentAt)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={chatBottomRef} />
+                </div>
+                <form onSubmit={handleSendChat} style={{ padding: "14px 24px", borderTop: "1px solid #f1f5f9", display: "flex", gap: 10, background: "white", flexShrink: 0 }}>
+                  <input type="text" placeholder={selectedTeacherGmail ? "Мессеж бичих..." : "Багш сонгоно уу"} value={chatInput}
+                    onChange={e => setChatInput(e.target.value)} disabled={!selectedTeacherGmail}
+                    style={{ flex: 1, padding: "10px 16px", borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 14, outline: "none", color: "#111827", background: "#f9fafb" }} />
+                  <button type="submit" disabled={chatSending || !chatInput.trim() || !selectedTeacherGmail}
+                    style={{ background: "#06b6d4", color: "white", border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, padding: "10px 20px", borderRadius: 12, opacity: (chatSending || !chatInput.trim() || !selectedTeacherGmail) ? 0.5 : 1 }}>
+                    Илгээх
+                  </button>
+                </form>
+              </div>
             </div>
           )}
 

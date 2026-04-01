@@ -1,32 +1,44 @@
-import { readDB, writeDB } from "@/lib/db";
+import supabase from "@/lib/supabase";
 import { randomUUID } from "crypto";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const assignmentId = searchParams.get("assignmentId");
   const studentGmail = searchParams.get("studentGmail");
-
-  const db = readDB();
-  const submissions = db.submissions || [];
+  const teacherGmail = searchParams.get("teacherGmail");
 
   if (assignmentId) {
-    return Response.json({ submissions: submissions.filter((s) => s.assignmentId === assignmentId) });
+    const { data } = await supabase
+      .from("submissions")
+      .select("*")
+      .eq("assignment_id", assignmentId);
+    return Response.json({ submissions: (data || []).map(toSubJS) });
   }
+
   if (studentGmail) {
-    return Response.json({ submissions: submissions.filter((s) => s.studentGmail === studentGmail) });
+    const { data } = await supabase
+      .from("submissions")
+      .select("*")
+      .eq("student_gmail", studentGmail);
+    return Response.json({ submissions: (data || []).map(toSubJS) });
   }
-  const teacherGmail = searchParams.get("teacherGmail");
+
   if (teacherGmail) {
-    const assignmentIds = new Set(
-      (db.assignments || []).filter((a) => a.teacherGmail === teacherGmail).map((a) => a.id)
-    );
-    const result = submissions
-      .filter((s) => assignmentIds.has(s.assignmentId))
-      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-    return Response.json({ submissions: result });
+    const { data: assignments } = await supabase
+      .from("assignments")
+      .select("id")
+      .eq("teacher_gmail", teacherGmail);
+    const ids = (assignments || []).map(a => a.id);
+    if (ids.length === 0) return Response.json({ submissions: [] });
+
+    const { data } = await supabase
+      .from("submissions")
+      .select("*")
+      .in("assignment_id", ids)
+      .order("submitted_at", { ascending: false });
+    return Response.json({ submissions: (data || []).map(toSubJS) });
   }
+
   return Response.json({ submissions: [] });
 }
 
@@ -41,56 +53,82 @@ export async function POST(request) {
     return Response.json({ error: "Мэдээлэл дутуу байна" }, { status: 400 });
   }
 
-  const db = readDB();
-  if (!db.submissions) db.submissions = [];
-  if (!db.assignments) db.assignments = [];
+  const { data: assignment } = await supabase
+    .from("assignments")
+    .select("deadline")
+    .eq("id", assignmentId)
+    .maybeSingle();
 
-  const assignment = db.assignments.find((a) => a.id === assignmentId);
-  if (!assignment) {
-    return Response.json({ error: "Даалгавар олдсонгүй" }, { status: 404 });
-  }
-
+  if (!assignment) return Response.json({ error: "Даалгавар олдсонгүй" }, { status: 404 });
   if (new Date() > new Date(assignment.deadline)) {
     return Response.json({ error: "Даалгаварын хугацаа дууссан байна" }, { status: 400 });
   }
 
   let filePath = null;
   if (file && file.size > 0) {
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadsDir, { recursive: true });
     const ext = (file.name || "file").split(".").pop();
     const filename = `${randomUUID()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(uploadsDir, filename), buffer);
-    filePath = `/uploads/${filename}`;
+    const { error: uploadError } = await supabase.storage
+      .from("uploads")
+      .upload(filename, buffer, { contentType: file.type || "application/octet-stream" });
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(filename);
+      filePath = urlData.publicUrl;
+    }
   }
 
-  const existing = db.submissions.find(
-    (s) => s.assignmentId === assignmentId && s.studentGmail === studentGmail
-  );
+  const { data: existing } = await supabase
+    .from("submissions")
+    .select("*")
+    .eq("assignment_id", assignmentId)
+    .eq("student_gmail", studentGmail)
+    .maybeSingle();
 
   if (existing) {
-    existing.text = text;
-    if (filePath) existing.filePath = filePath;
-    existing.submittedAt = new Date().toISOString();
-    existing.score = null;
-    existing.gradedAt = null;
-    writeDB(db);
-    return Response.json({ submission: existing });
+    const updates = {
+      text,
+      submitted_at: new Date().toISOString(),
+      score: null,
+      graded_at: null,
+    };
+    if (filePath) updates.file_path = filePath;
+    const { data } = await supabase
+      .from("submissions")
+      .update(updates)
+      .eq("id", existing.id)
+      .select()
+      .single();
+    return Response.json({ submission: toSubJS(data) });
   }
 
-  const submission = {
-    id: randomUUID(),
-    assignmentId,
-    studentGmail,
-    text,
-    filePath,
-    submittedAt: new Date().toISOString(),
-    score: null,
-    gradedAt: null,
-  };
+  const { data } = await supabase
+    .from("submissions")
+    .insert({
+      id: randomUUID(),
+      assignment_id: assignmentId,
+      student_gmail: studentGmail,
+      text,
+      file_path: filePath,
+      submitted_at: new Date().toISOString(),
+      score: null,
+      graded_at: null,
+    })
+    .select()
+    .single();
 
-  db.submissions.push(submission);
-  writeDB(db);
-  return Response.json({ submission });
+  return Response.json({ submission: toSubJS(data) });
+}
+
+function toSubJS(s) {
+  return {
+    id: s.id,
+    assignmentId: s.assignment_id,
+    studentGmail: s.student_gmail,
+    text: s.text,
+    filePath: s.file_path,
+    submittedAt: s.submitted_at,
+    score: s.score,
+    gradedAt: s.graded_at,
+  };
 }

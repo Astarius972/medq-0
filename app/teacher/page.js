@@ -656,6 +656,12 @@ export default function TeacherDashboard() {
                         <p className="text-xs text-gray-400">{s.gmail}</p>
                       </div>
                       <span className="text-xs px-3 py-1 rounded-full font-semibold" style={{ background:"#fff7ed", color:"#f97316" }}>{s.grade}-р анги</span>
+                      {s.personalCode && (
+                        <div className="flex flex-col items-end gap-0.5 ml-2">
+                          <span className="text-xs text-gray-400">Хувийн код</span>
+                          <span className="font-mono font-bold text-sm tracking-widest" style={{ color:"#06b6d4" }}>{s.personalCode}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
