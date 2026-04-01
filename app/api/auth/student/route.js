@@ -1,11 +1,11 @@
 import { readDB, writeDB } from "@/lib/db";
 
 export async function POST(request) {
-  const { gmail, code } = await request.json();
+  const { gmail, code, grade } = await request.json();
 
-  if (!gmail || !code) {
+  if (!gmail || !code || !grade) {
     return Response.json(
-      { error: "Gmail болон ангийн кодыг бөглөнө үү" },
+      { error: "Gmail, ангийн код болон ангиа сонгоно уу" },
       { status: 400 }
     );
   }
@@ -29,10 +29,14 @@ export async function POST(request) {
     student = {
       gmail: normalizedGmail,
       code: code.toUpperCase().trim(),
+      grade: Number(grade),
       teacherGmail: teacher.gmail,
       joinedAt: new Date().toISOString(),
     };
     db.students.push(student);
+    writeDB(db);
+  } else {
+    student.grade = Number(grade);
     writeDB(db);
   }
 

@@ -1,7 +1,23 @@
 {
   "teachers": [
-    { "gmail": "bagsh@gmail.com", "name": "Багш 1", "code": null },
-    { "gmail": "teacher@gmail.com", "name": "Teacher", "code": null }
+    {
+      "gmail": "uchralmunkhbold@gmail.com",
+      "name": "Багш 1",
+      "code": "QH4U7A"
+    },
+    {
+      "gmail": "teacher@gmail.com",
+      "name": "Teacher",
+      "code": null
+    }
   ],
-  "students": []
+  "students": [
+    {
+      "gmail": "medq@gmail.com",
+      "code": "QH4U7A",
+      "teacherGmail": "uchralmunkhbold@gmail.com",
+      "joinedAt": "2026-04-01T04:24:06.655Z",
+      "grade": 12
+    }
+  ]
 }

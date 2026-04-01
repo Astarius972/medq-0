@@ -6,6 +6,7 @@ export default function Home() {
   const [role, setRole] = useState("student");
   const [gmail, setGmail] = useState("");
   const [code, setCode] = useState("");
+  const [grade, setGrade] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -29,7 +30,7 @@ export default function Home() {
         const res = await fetch("/api/auth/student", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gmail, code }),
+          body: JSON.stringify({ gmail, code, grade }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
@@ -174,6 +175,30 @@ export default function Home() {
                     className="bg-transparent flex-1 text-sm text-gray-700 outline-none placeholder-gray-400 uppercase"
                     required
                   />
+                </div>
+              </div>
+            )}
+
+            {/* Grade selector — student only */}
+            {role === "student" && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-2">Анги сонгох</label>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGrade(g)}
+                      className="py-2 rounded-lg text-sm font-semibold transition-colors"
+                      style={
+                        grade === g
+                          ? { background: "#06b6d4", color: "white" }
+                          : { background: "#f3f4f6", color: "#6b7280" }
+                      }
+                    >
+                      {g}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

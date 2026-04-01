@@ -57,13 +57,8 @@ export default function StudentDashboard() {
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm mb-4">
-          <p className="text-xs text-gray-400 mb-1">Ангийн код</p>
-          <span
-            className="text-xl font-black tracking-widest"
-            style={{ color: "#06b6d4" }}
-          >
-            {user.code}
-          </span>
+          <p className="text-xs text-gray-400 mb-1">Анги</p>
+          <p className="font-bold text-gray-800 text-lg">{user.grade}-р анги</p>
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm">
