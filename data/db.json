@@ -1,0 +1,7 @@
+{
+  "teachers": [
+    { "gmail": "bagsh@gmail.com", "name": "Багш 1", "code": null },
+    { "gmail": "teacher@gmail.com", "name": "Teacher", "code": null }
+  ],
+  "students": []
+}
