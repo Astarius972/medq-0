@@ -1,10 +1,28 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { isPast, fmtDate, timeLeft, relTime } from "@/lib/formatters";
 
 export default function StudentDashboard() {
   const [user, setUser] = useState(null);
+  const [activeTab, setActiveTab] = useState("dashboard");
   const router = useRouter();
+
+  // assignments
+  const [assignments, setAssignments] = useState([]);
+  const [mySubmissions, setMySubmissions] = useState([]);
+  const [submitTarget, setSubmitTarget] = useState(null);
+  const [submitText, setSubmitText] = useState("");
+  const [submitFile, setSubmitFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const fileInputRef = useRef(null);
+
+  // chat
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const chatBottomRef = useRef(null);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("user");
@@ -14,140 +32,431 @@ export default function StudentDashboard() {
     setUser(parsed);
   }, [router]);
 
-  function logout() {
-    sessionStorage.removeItem("user");
-    router.push("/");
+  useEffect(() => {
+    if (!user) return;
+    Promise.all([
+      fetch(`/api/assignments?studentTeacherGmail=${encodeURIComponent(user.teacherGmail)}&grade=${user.grade}`).then(r => r.json()),
+      fetch(`/api/submissions?studentGmail=${encodeURIComponent(user.gmail)}`).then(r => r.json()),
+    ]).then(([aData, sData]) => {
+      setAssignments(aData.assignments || []);
+      setMySubmissions(sData.submissions || []);
+    });
+  }, [user]);
+
+  const loadChat = useCallback((gmail, teacherGmail) => {
+    fetch(`/api/chat?studentGmail=${encodeURIComponent(gmail)}&teacherGmail=${encodeURIComponent(teacherGmail)}`)
+      .then(r => r.json()).then(d => setChatMessages(d.messages || []));
+  }, []);
+
+  // load chat on mount, then poll when on chat tab
+  useEffect(() => {
+    if (!user) return;
+    loadChat(user.gmail, user.teacherGmail);
+  }, [user, loadChat]);
+
+  useEffect(() => {
+    if (!user || activeTab !== "chat") return;
+    const iv = setInterval(() => loadChat(user.gmail, user.teacherGmail), 5000);
+    return () => clearInterval(iv);
+  }, [user, activeTab, loadChat]);
+
+  useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
+
+  function logout() { sessionStorage.removeItem("user"); router.push("/"); }
+
+  function getSubmission(assignmentId) {
+    return mySubmissions.find(s => s.assignmentId === assignmentId) || null;
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!submitFile && !submitText.trim()) { setSubmitError("Зураг эсвэл тайлбар оруулна уу"); return; }
+    setSubmitting(true); setSubmitError("");
+    try {
+      const fd = new FormData();
+      fd.append("assignmentId", submitTarget.id);
+      fd.append("studentGmail", user.gmail);
+      fd.append("text", submitText);
+      if (submitFile) fd.append("file", submitFile);
+      const res = await fetch("/api/submissions", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMySubmissions(prev => [...prev.filter(s => s.assignmentId !== submitTarget.id), data.submission]);
+      setSubmitTarget(null); setSubmitText(""); setSubmitFile(null);
+    } catch (err) { setSubmitError(err.message); }
+    finally { setSubmitting(false); }
+  }
+
+  async function handleSendChat(e) {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    setChatSending(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromGmail: user.gmail, toGmail: user.teacherGmail, text: chatInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setChatMessages(prev => [...prev, data.message]);
+      setChatInput("");
+    } finally { setChatSending(false); }
   }
 
   if (!user) return null;
+  const displayName = user.lastName && user.firstName ? `${user.lastName} ${user.firstName}` : user.gmail.split("@")[0];
+  const activeAssignments = assignments.filter(a => !isPast(a.deadline));
+  const pastAssignments = assignments.filter(a => isPast(a.deadline));
+  const unreadChat = (() => {
+    if (!chatMessages.length) return false;
+    const sorted = [...chatMessages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt));
+    const last = sorted[sorted.length - 1];
+    return last.fromGmail === user.teacherGmail;
+  })();
+
+  const TABS = [
+    { key: "dashboard", label: "Хяналтын самбар", badge: null },
+    { key: "assignments", label: "Даалгаврууд", badge: activeAssignments.length || null },
+    { key: "chat", label: "Чат", badge: unreadChat ? "!" : null },
+  ];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#f0fdfd" }}>
+    <div className="flex flex-col" style={{ height: "100vh", overflow: "hidden", background: "#f0fdfd", color: "#111827" }}>
       {/* Header */}
       <div className="bg-white shadow-sm px-8 py-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #4dd0e1, #f97316)" }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-              <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" />
-            </svg>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg,#4dd0e1,#f97316)" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" /></svg>
           </div>
           <span className="font-bold text-gray-900 text-lg">Анги платформ</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-400 hidden sm:block">{user.gmail}</span>
-          <button
-            onClick={logout}
-            className="text-sm font-medium text-gray-500 hover:text-red-500 transition-colors px-4 py-2 rounded-lg hover:bg-red-50"
-          >
-            Гарах
-          </button>
+          <button onClick={logout} className="text-sm font-medium text-gray-500 hover:text-red-500 transition-colors px-4 py-2 rounded-lg hover:bg-red-50">Гарах</button>
         </div>
       </div>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col px-8 py-8 max-w-6xl mx-auto w-full">
-
-        {/* Welcome banner */}
-        <div
-          className="rounded-3xl p-8 mb-8 flex items-center justify-between"
-          style={{ background: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)" }}
-        >
-          <div>
-            <p className="text-cyan-100 text-sm mb-1">Тавтай морилно уу</p>
-            <h1 className="text-white text-3xl font-black mb-1">{user.lastName} {user.firstName}</h1>
-            <p className="text-cyan-200 text-sm">{user.gmail}</p>
-          </div>
-          <div
-            className="w-20 h-20 rounded-2xl flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-          >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
-              <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" />
-            </svg>
-          </div>
-        </div>
-
-        {/* Info cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#e0f7fa" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="#06b6d4">
-                <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 mb-0.5">Анги</p>
-              <p className="text-2xl font-black text-gray-900">{user.grade}-р анги</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#fce4ec" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="#e91e63">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 mb-0.5">Багш</p>
-              <p className="text-lg font-bold text-gray-900">{user.teacherName}</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#e8eaf6" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="#7986cb">
-                <path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 mb-0.5">Элссэн огноо</p>
-              <p className="text-lg font-bold text-gray-900">
-                {new Date(user.joinedAt).toLocaleDateString("mn-MN")}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Placeholder sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 flex-1">
-          <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col">
-            <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: "#fce4ec" }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#e91e63">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z" />
-                </svg>
-              </span>
-              Даалгаварууд
-            </h2>
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-gray-300 text-sm">Одоохондоо даалгавар байхгүй</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col">
-            <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: "#e8eaf6" }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#7986cb">
-                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
-                </svg>
-              </span>
-              Мессежүүд
-            </h2>
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-gray-300 text-sm">Одоохондоо мессеж байхгүй</p>
-            </div>
-          </div>
+      {/* Tabs */}
+      <div className="bg-white border-b border-gray-100 px-8 shrink-0">
+        <div className="flex gap-1">
+          {TABS.map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              className="flex items-center gap-2 px-5 py-4 text-sm font-semibold border-b-2 transition-colors"
+              style={activeTab === tab.key ? { borderColor: "#06b6d4", color: "#06b6d4" } : { borderColor: "transparent", color: "#9ca3af" }}>
+              {tab.label}
+              {tab.badge && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full text-white font-bold" style={{ background: "#06b6d4" }}>{tab.badge}</span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+
+        {/* DASHBOARD */}
+        {activeTab === "dashboard" && (
+          <div className="flex-1 overflow-y-auto px-8 py-8">
+            <div className="max-w-6xl mx-auto">
+              <div className="rounded-3xl p-8 mb-8 flex items-center justify-between"
+                style={{ background: "linear-gradient(135deg,#06b6d4 0%,#0891b2 100%)" }}>
+                <div>
+                  <p className="text-cyan-100 text-sm mb-1">Тавтай морилно уу</p>
+                  <h1 className="text-white text-3xl font-black mb-1">{displayName}</h1>
+                  <p className="text-cyan-200 text-sm">{user.gmail}</p>
+                </div>
+                <div className="w-20 h-20 rounded-2xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="white"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" /></svg>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+                <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#e0f7fa" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#06b6d4"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" /></svg>
+                  </div>
+                  <div><p className="text-xs text-gray-400 mb-0.5">Анги</p><p className="text-2xl font-black text-gray-900">{user.grade}-р анги</p></div>
+                </div>
+                <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#fce4ec" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#e91e63"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
+                  </div>
+                  <div><p className="text-xs text-gray-400 mb-0.5">Багш</p><p className="text-lg font-bold text-gray-900">{user.teacherName}</p></div>
+                </div>
+                <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#e8eaf6" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#7986cb"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" /></svg>
+                  </div>
+                  <div><p className="text-xs text-gray-400 mb-0.5">Элссэн огноо</p><p className="text-lg font-bold text-gray-900">{new Date(user.joinedAt).toLocaleDateString("mn-MN")}</p></div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col">
+                  <h2 className="font-bold text-gray-900 mb-4">Идэвхтэй даалгаврууд</h2>
+                  {activeAssignments.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center"><p className="text-gray-300 text-sm">Даалгавар байхгүй</p></div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {activeAssignments.slice(0, 3).map(a => {
+                        const sub = getSubmission(a.id);
+                        return (
+                          <div key={a.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "#f9fafb" }}>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-900 text-sm">{a.title}</p>
+                              <p className="text-xs text-gray-400">{timeLeft(a.deadline)}</p>
+                            </div>
+                            {sub ? (
+                              <span className="text-xs px-2 py-1 rounded-full font-semibold" style={{ background: "#dcfce7", color: "#16a34a" }}>Илгээсэн</span>
+                            ) : (
+                              <button onClick={() => { setSubmitTarget(a); setSubmitText(""); setSubmitFile(null); setSubmitError(""); setActiveTab("assignments"); }}
+                                className="text-xs px-3 py-1.5 rounded-lg font-bold text-white" style={{ background: "#06b6d4" }}>
+                                Илгээх
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col">
+                  <h2 className="font-bold text-gray-900 mb-4">Багштай харилцах</h2>
+                  {chatMessages.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                      <p className="text-gray-300 text-sm">Мессеж байхгүй</p>
+                      <button onClick={() => setActiveTab("chat")}
+                        className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white" style={{ background: "#06b6d4" }}>
+                        Чат нээх
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 flex-1">
+                      {chatMessages.slice(-3).map(msg => {
+                        const isMe = msg.fromGmail === user.gmail;
+                        return (
+                          <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                            <div className="max-w-[80%] px-3 py-2 rounded-xl text-sm"
+                              style={isMe ? { background: "#06b6d4", color: "white" } : { background: "#f3f4f6", color: "#111827" }}>
+                              {msg.text}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <button onClick={() => setActiveTab("chat")} className="text-xs text-gray-400 underline self-end mt-1">
+                        Бүгдийг харах
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ASSIGNMENTS */}
+        {activeTab === "assignments" && (
+          <div className="flex-1 overflow-y-auto px-8 py-8">
+            <div className="max-w-6xl mx-auto">
+              <h2 className="text-2xl font-black text-gray-900 mb-6">Миний даалгаврууд</h2>
+              {assignments.length === 0 ? (
+                <div className="bg-white rounded-2xl p-12 text-center shadow-sm">
+                  <svg className="mx-auto mb-3" width="40" height="40" viewBox="0 0 24 24" fill="#d1d5db"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" /></svg>
+                  <p className="text-gray-400">Одоохондоо даалгавар байхгүй</p>
+                </div>
+              ) : (
+                <>
+                  {activeAssignments.length > 0 && (
+                    <div className="mb-6">
+                      <h3 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wide">Идэвхтэй</h3>
+                      <div className="flex flex-col gap-3">
+                        {activeAssignments.map(a => {
+                          const sub = getSubmission(a.id);
+                          const tl = timeLeft(a.deadline);
+                          return (
+                            <div key={a.id} className="bg-white rounded-2xl p-5 shadow-sm border-l-4" style={{ borderColor: "#06b6d4" }}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-gray-900 text-lg">{a.title}</p>
+                                  {a.description && <p className="text-sm text-gray-500 mt-1">{a.description}</p>}
+                                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                                    <span>Хугацаа: {fmtDate(a.deadline)}</span>
+                                    <span>•</span>
+                                    <span>{a.points} оноо</span>
+                                    {tl && <><span>•</span><span className="font-semibold" style={{ color: "#06b6d4" }}>{tl}</span></>}
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-2 shrink-0">
+                                  {sub ? (
+                                    <>
+                                      {sub.score !== null ? (
+                                        <span className="text-2xl font-black" style={{ color: "#06b6d4" }}>{sub.score}%</span>
+                                      ) : (
+                                        <span className="text-xs px-3 py-1.5 rounded-full font-semibold" style={{ background: "#dcfce7", color: "#16a34a" }}>✓ Илгээсэн</span>
+                                      )}
+                                      <button onClick={() => { setSubmitTarget(a); setSubmitText(sub.text || ""); setSubmitFile(null); setSubmitError(""); }}
+                                        className="text-xs text-gray-400 underline">Дахин илгээх</button>
+                                    </>
+                                  ) : (
+                                    <button onClick={() => { setSubmitTarget(a); setSubmitText(""); setSubmitFile(null); setSubmitError(""); }}
+                                      className="px-5 py-2.5 rounded-xl font-bold text-white text-sm" style={{ background: "#06b6d4" }}>
+                                      Илгээх
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {pastAssignments.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wide">Хугацаа дууссан</h3>
+                      <div className="flex flex-col gap-3">
+                        {pastAssignments.map(a => {
+                          const sub = getSubmission(a.id);
+                          return (
+                            <div key={a.id} className="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-gray-200 opacity-70">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-gray-700">{a.title}</p>
+                                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                                    <span>Дууссан: {fmtDate(a.deadline)}</span>
+                                    <span>•</span>
+                                    <span>{a.points} оноо</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  {sub ? (
+                                    sub.score !== null
+                                      ? <span className="text-2xl font-black" style={{ color: "#06b6d4" }}>{sub.score}%</span>
+                                      : <span className="text-xs px-3 py-1.5 rounded-full font-semibold" style={{ background: "#dcfce7", color: "#16a34a" }}>✓ Илгээсэн</span>
+                                  ) : (
+                                    <span className="text-xs px-3 py-1.5 rounded-full font-semibold" style={{ background: "#fee2e2", color: "#ef4444" }}>Илгээгээгүй</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* CHAT */}
+        {activeTab === "chat" && (
+          <div className="flex-1 flex flex-col bg-white max-w-2xl mx-auto w-full">
+            <div className="px-6 py-4 border-b border-gray-100 shrink-0">
+              <p className="font-bold text-gray-900">Багштай харилцах</p>
+              <p className="text-xs text-gray-400">{user.teacherName || user.teacherGmail}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
+              {chatMessages.length === 0 && (
+                <p className="text-center text-gray-300 text-sm mt-12">Мессеж байхгүй. Эхний мессежийг илгээнэ үү.</p>
+              )}
+              {[...chatMessages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt)).map(msg => {
+                const isMe = msg.fromGmail === user.gmail;
+                return (
+                  <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                    <div className="max-w-xs px-4 py-2.5 rounded-2xl text-sm"
+                      style={isMe
+                        ? { background: "#06b6d4", color: "white", borderBottomRightRadius: 4 }
+                        : { background: "#f3f4f6", color: "#111827", borderBottomLeftRadius: 4 }}>
+                      <p>{msg.text}</p>
+                      <p className="text-xs mt-1 opacity-60">{relTime(msg.sentAt)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={chatBottomRef} />
+            </div>
+            <form onSubmit={handleSendChat} className="px-6 py-4 border-t border-gray-100 flex gap-3 shrink-0">
+              <input type="text" placeholder="Мессеж бичих..." value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                className="flex-1 px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ background: "#f3f4f6", color: "#111827" }} />
+              <button type="submit" disabled={chatSending || !chatInput.trim()}
+                className="px-5 py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                style={{ background: "#06b6d4" }}>
+                Илгээх
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+
+      {/* SUBMIT MODAL */}
+      {submitTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl font-bold text-gray-900">Даалгавар илгээх</h3>
+              <button onClick={() => setSubmitTarget(null)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">{submitTarget.title}</p>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Тайлбар (сонголтой)</label>
+                <textarea placeholder="Ажлын тайлбар бичнэ үү..." rows={3} value={submitText}
+                  onChange={e => setSubmitText(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
+                  style={{ background: "#f3f4f6", color: "#111827" }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Зураг / файл хавсаргах</label>
+                <div className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors"
+                  style={{ borderColor: submitFile ? "#06b6d4" : "#e5e7eb", background: submitFile ? "#e0f7fa" : "white" }}
+                  onClick={() => fileInputRef.current?.click()}>
+                  {submitFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      {submitFile.type.startsWith("image/") ? (
+                        <img src={URL.createObjectURL(submitFile)} alt="" className="h-20 rounded-lg object-contain"
+                          onLoad={e => URL.revokeObjectURL(e.target.src)} />
+                      ) : (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="#06b6d4"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" /></svg>
+                      )}
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-gray-900">{submitFile.name}</p>
+                        <button type="button" onClick={e => { e.stopPropagation(); setSubmitFile(null); }}
+                          className="text-xs text-red-400 mt-0.5">Устгах</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <svg className="mx-auto mb-2" width="28" height="28" viewBox="0 0 24 24" fill="#9ca3af"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" /></svg>
+                      <p className="text-sm text-gray-400">Зураг, файл хавсаргах</p>
+                      <p className="text-xs text-gray-300 mt-1">Товшиж файл сонгох</p>
+                    </>
+                  )}
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx" className="hidden"
+                  onChange={e => setSubmitFile(e.target.files?.[0] || null)} />
+              </div>
+              {submitError && <p className="text-sm text-red-500">{submitError}</p>}
+              <div className="flex gap-3 mt-2">
+                <button type="submit" disabled={submitting}
+                  className="flex-1 py-3 rounded-xl font-bold text-white disabled:opacity-50 text-sm"
+                  style={{ background: "#06b6d4" }}>
+                  {submitting ? "Илгээж байна..." : "Илгээх"}
+                </button>
+                <button type="button" onClick={() => setSubmitTarget(null)}
+                  className="px-6 py-3 rounded-xl font-semibold text-sm text-gray-600 border border-gray-200">
+                  Болих
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
