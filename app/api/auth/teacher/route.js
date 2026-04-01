@@ -32,7 +32,7 @@ export async function POST(request) {
 
   if (!teacher) {
     const name = normalized.split("@")[0];
-    const { data: created } = await supabase
+    const { data: created, error } = await supabase
       .from("teachers")
       .insert({
         gmail: normalized,
@@ -43,6 +43,7 @@ export async function POST(request) {
       })
       .select()
       .single();
+    if (error || !created) return Response.json({ error: "Бүртгэл хадгалахад алдаа гарлаа: " + (error?.message || "unknown") }, { status: 500 });
     return Response.json({ teacher: { gmail: created.gmail, name: created.name, code: created.code } });
   }
 

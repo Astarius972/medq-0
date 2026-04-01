@@ -24,6 +24,12 @@ export default function StudentDashboard() {
   const [chatSending, setChatSending] = useState(false);
   const chatBottomRef = useRef(null);
 
+  // AI chat
+  const [aiMode, setAiMode] = useState(false);
+  const [aiMessages, setAiMessages] = useState([]); // { role:"user"|"assistant", content }
+  const [aiInput, setAiInput] = useState("");
+  const [aiSending, setAiSending] = useState(false);
+
   useEffect(() => {
     const stored = sessionStorage.getItem("user");
     if (!stored) { router.push("/"); return; }
@@ -103,6 +109,29 @@ export default function StudentDashboard() {
       setChatMessages(prev => [...prev, data.message]);
       setChatInput("");
     } finally { setChatSending(false); }
+  }
+
+  async function handleSendAi(e) {
+    e.preventDefault();
+    if (!aiInput.trim()) return;
+    const userMsg = { role: "user", content: aiInput };
+    setAiMessages(prev => [...prev, userMsg]);
+    setAiInput("");
+    setAiSending(true);
+    try {
+      const res = await fetch("/api/ai-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: aiInput, history: aiMessages }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setAiMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+    } catch (err) {
+      setAiMessages(prev => [...prev, { role: "assistant", content: "Алдаа гарлаа: " + err.message }]);
+    } finally {
+      setAiSending(false);
+    }
   }
 
   if (!user) return null;
@@ -507,73 +536,168 @@ export default function StudentDashboard() {
           {/* ── CHAT ── */}
           {activeTab === "chat" && (
             <div style={{ height: "100%", display: "flex" }}>
-              {/* Teacher list */}
-              <div style={{ width: 220, borderRight: "1px solid #f1f5f9", overflowY: "auto", background: "white", flexShrink: 0 }}>
-                <p style={{ margin: 0, padding: "14px 16px 10px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Багш нар</p>
-                {allTeachers.length === 0 && (
-                  <p style={{ fontSize: 12, color: "#d1d5db", textAlign: "center", padding: "12px 8px", margin: 0 }}>Багш олдсонгүй</p>
-                )}
-                {allTeachers.map(t => {
-                  const active = t.gmail === selectedTeacherGmail;
-                  return (
-                    <button key={t.gmail} onClick={() => setSelectedTeacherGmail(t.gmail)}
-                      style={{ width: "100%", textAlign: "left", border: "none", cursor: "pointer", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10,
-                        background: active ? "#e0f7fa" : "transparent", borderLeft: active ? "3px solid #06b6d4" : "3px solid transparent" }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: active ? "#06b6d4" : "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", color: active ? "white" : "#6b7280", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-                        {t.name[0].toUpperCase()}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: active ? "#0891b2" : "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.gmail.split("@")[0]}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Messages */}
-              <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                {selectedTeacher && (
-                  <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f5f9", background: "white", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "#e0f7fa", display: "flex", alignItems: "center", justifyContent: "center", color: "#0891b2", fontWeight: 800, fontSize: 13 }}>
-                      {selectedTeacher.name[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{selectedTeacher.name}</p>
-                      <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{selectedTeacher.gmail}</p>
-                    </div>
-                  </div>
-                )}
-                <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  {chatMessages.length === 0 && (
-                    <p style={{ textAlign: "center", color: "#d1d5db", fontSize: 13, marginTop: 48 }}>Мессеж байхгүй. Эхний мессежийг илгээнэ үү.</p>
+              {/* Left sidebar: Teacher list + AI button at bottom */}
+              <div style={{ width: 220, borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", background: "white", flexShrink: 0 }}>
+                <div style={{ flex: 1, overflowY: "auto" }}>
+                  <p style={{ margin: 0, padding: "14px 16px 10px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Багш нар</p>
+                  {allTeachers.length === 0 && (
+                    <p style={{ fontSize: 12, color: "#d1d5db", textAlign: "center", padding: "12px 8px", margin: 0 }}>Багш олдсонгүй</p>
                   )}
-                  {[...chatMessages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt)).map(msg => {
-                    const isMe = msg.fromGmail === user.gmail;
+                  {allTeachers.map(t => {
+                    const active = !aiMode && t.gmail === selectedTeacherGmail;
                     return (
-                      <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                        <div style={{ maxWidth: 320, padding: "10px 14px", borderRadius: 18, fontSize: 14,
-                          borderBottomRightRadius: isMe ? 4 : 18, borderBottomLeftRadius: isMe ? 18 : 4,
-                          background: isMe ? "#06b6d4" : "white", color: isMe ? "white" : "#111827",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                          <p style={{ margin: 0 }}>{msg.text}</p>
-                          <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.6 }}>{relTime(msg.sentAt)}</p>
+                      <button key={t.gmail} onClick={() => { setAiMode(false); setSelectedTeacherGmail(t.gmail); }}
+                        style={{ width: "100%", textAlign: "left", border: "none", cursor: "pointer", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10,
+                          background: active ? "#e0f7fa" : "transparent", borderLeft: active ? "3px solid #06b6d4" : "3px solid transparent" }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 10, background: active ? "#06b6d4" : "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", color: active ? "white" : "#6b7280", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                          {t.name[0].toUpperCase()}
                         </div>
-                      </div>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: active ? "#0891b2" : "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</p>
+                          <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.gmail.split("@")[0]}</p>
+                        </div>
+                      </button>
                     );
                   })}
-                  <div ref={chatBottomRef} />
                 </div>
-                <form onSubmit={handleSendChat} style={{ padding: "14px 24px", borderTop: "1px solid #f1f5f9", display: "flex", gap: 10, background: "white", flexShrink: 0 }}>
-                  <input type="text" placeholder={selectedTeacherGmail ? "Мессеж бичих..." : "Багш сонгоно уу"} value={chatInput}
-                    onChange={e => setChatInput(e.target.value)} disabled={!selectedTeacherGmail}
-                    style={{ flex: 1, padding: "10px 16px", borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 14, outline: "none", color: "#111827", background: "#f9fafb" }} />
-                  <button type="submit" disabled={chatSending || !chatInput.trim() || !selectedTeacherGmail}
-                    style={{ background: "#06b6d4", color: "white", border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, padding: "10px 20px", borderRadius: 12, opacity: (chatSending || !chatInput.trim() || !selectedTeacherGmail) ? 0.5 : 1 }}>
-                    Илгээх
+                {/* AI button pinned at bottom-left */}
+                <div style={{ padding: "10px 12px", borderTop: "1px solid #f1f5f9" }}>
+                  <button onClick={() => setAiMode(true)}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, border: "none", cursor: "pointer",
+                      background: aiMode ? "linear-gradient(135deg,#7c3aed,#6d28d9)" : "linear-gradient(135deg,#f3f0ff,#ede9fe)",
+                      transition: "all 0.15s" }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 10, background: aiMode ? "rgba(255,255,255,0.2)" : "#7c3aed", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
+                    </div>
+                    <div style={{ minWidth: 0, textAlign: "left" }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: aiMode ? "white" : "#6d28d9" }}>AI туслах</p>
+                      <p style={{ margin: 0, fontSize: 11, color: aiMode ? "rgba(255,255,255,0.7)" : "#8b5cf6" }}>Хичээлд тусламж</p>
+                    </div>
                   </button>
-                </form>
+                </div>
               </div>
+
+              {/* Right: AI chat or Teacher chat */}
+              {aiMode ? (
+                <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                  {/* AI header */}
+                  <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f5f9", background: "white", flexShrink: 0, display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#7c3aed,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>AI Хичээлийн туслах</p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#8b5cf6" }}>Математик, физик, хими болон бусад хичээл</p>
+                    </div>
+                    <button onClick={() => setAiMessages([])}
+                      style={{ marginLeft: "auto", background: "#f3f0ff", border: "none", cursor: "pointer", color: "#7c3aed", fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 8 }}>
+                      Цэвэрлэх
+                    </button>
+                  </div>
+                  {/* AI messages */}
+                  <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+                    {aiMessages.length === 0 && (
+                      <div style={{ textAlign: "center", marginTop: 40 }}>
+                        <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#7c3aed,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
+                        </div>
+                        <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#374151" }}>AI Хичээлийн туслах</p>
+                        <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Ойлгоогүй хичээлийнхээ талаар асуугаарай</p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 16 }}>
+                          {["2x + 5 = 13 бодлогыг хэрхэн бодох вэ?","Фотосинтез гэж юу вэ?","Дэлхийн 2-р дайн хэзээ дууссан вэ?","Хүндийн хүч гэж юу вэ?"].map(q => (
+                            <button key={q} onClick={() => { setAiInput(q); }}
+                              style={{ background: "#f3f0ff", border: "1px solid #ddd6fe", cursor: "pointer", color: "#6d28d9", fontSize: 12, padding: "6px 12px", borderRadius: 99, fontWeight: 500 }}>
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {aiMessages.map((msg, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                        {msg.role === "assistant" && (
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#7c3aed,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginRight: 8, marginTop: 2 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
+                          </div>
+                        )}
+                        <div style={{ maxWidth: 440, padding: "10px 16px", borderRadius: 18, fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap",
+                          borderBottomRightRadius: msg.role === "user" ? 4 : 18,
+                          borderBottomLeftRadius: msg.role === "user" ? 18 : 4,
+                          background: msg.role === "user" ? "linear-gradient(135deg,#7c3aed,#6d28d9)" : "white",
+                          color: msg.role === "user" ? "white" : "#111827",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {aiSending && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#7c3aed,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
+                        </div>
+                        <div style={{ background: "white", padding: "10px 16px", borderRadius: 18, borderBottomLeftRadius: 4, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", display: "flex", gap: 4, alignItems: "center" }}>
+                          {[0,1,2].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", animation: `bounce 1s ${i*0.2}s infinite` }} />)}
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatBottomRef} />
+                  </div>
+                  {/* AI input */}
+                  <form onSubmit={handleSendAi} style={{ padding: "14px 24px", borderTop: "1px solid #f1f5f9", display: "flex", gap: 10, background: "white", flexShrink: 0 }}>
+                    <input type="text" placeholder="Хичээлийн талаар асуух..." value={aiInput}
+                      onChange={e => setAiInput(e.target.value)} disabled={aiSending}
+                      style={{ flex: 1, padding: "10px 16px", borderRadius: 12, border: "1px solid #ddd6fe", fontSize: 14, outline: "none", color: "#111827", background: "#faf8ff" }} />
+                    <button type="submit" disabled={aiSending || !aiInput.trim()}
+                      style={{ background: "linear-gradient(135deg,#7c3aed,#6d28d9)", color: "white", border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, padding: "10px 20px", borderRadius: 12, opacity: (aiSending || !aiInput.trim()) ? 0.5 : 1 }}>
+                      Илгээх
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                /* Teacher chat */
+                <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                  {selectedTeacher && (
+                    <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f5f9", background: "white", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: "#e0f7fa", display: "flex", alignItems: "center", justifyContent: "center", color: "#0891b2", fontWeight: 800, fontSize: 13 }}>
+                        {selectedTeacher.name[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{selectedTeacher.name}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{selectedTeacher.gmail}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    {chatMessages.length === 0 && (
+                      <p style={{ textAlign: "center", color: "#d1d5db", fontSize: 13, marginTop: 48 }}>Мессеж байхгүй. Эхний мессежийг илгээнэ үү.</p>
+                    )}
+                    {[...chatMessages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt)).map(msg => {
+                      const isMe = msg.fromGmail === user.gmail;
+                      return (
+                        <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                          <div style={{ maxWidth: 320, padding: "10px 14px", borderRadius: 18, fontSize: 14,
+                            borderBottomRightRadius: isMe ? 4 : 18, borderBottomLeftRadius: isMe ? 18 : 4,
+                            background: isMe ? "#06b6d4" : "white", color: isMe ? "white" : "#111827",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                            <p style={{ margin: 0 }}>{msg.text}</p>
+                            <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.6 }}>{relTime(msg.sentAt)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div ref={chatBottomRef} />
+                  </div>
+                  <form onSubmit={handleSendChat} style={{ padding: "14px 24px", borderTop: "1px solid #f1f5f9", display: "flex", gap: 10, background: "white", flexShrink: 0 }}>
+                    <input type="text" placeholder={selectedTeacherGmail ? "Мессеж бичих..." : "Багш сонгоно уу"} value={chatInput}
+                      onChange={e => setChatInput(e.target.value)} disabled={!selectedTeacherGmail}
+                      style={{ flex: 1, padding: "10px 16px", borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 14, outline: "none", color: "#111827", background: "#f9fafb" }} />
+                    <button type="submit" disabled={chatSending || !chatInput.trim() || !selectedTeacherGmail}
+                      style={{ background: "#06b6d4", color: "white", border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, padding: "10px 20px", borderRadius: 12, opacity: (chatSending || !chatInput.trim() || !selectedTeacherGmail) ? 0.5 : 1 }}>
+                      Илгээх
+                    </button>
+                  </form>
+                </div>
+              )}
             </div>
           )}
 

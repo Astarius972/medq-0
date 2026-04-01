@@ -1,4 +1,4 @@
--- =============================================
+    -- =============================================
 -- Supabase SQL schema — Анги платформ
 -- Supabase dashboard > SQL Editor дээр ажиллуулна
 -- =============================================
@@ -16,9 +16,11 @@ create table if not exists students (
   code              text not null,
   personal_code     text unique,
   grade             integer,
+  class_section     text default 'А',
   teacher_gmail     text references teachers(gmail),
   last_name         text,
   first_name        text,
+  password          text,
   joined_at         timestamptz default now(),
   primary key (gmail, code)
 );
@@ -29,6 +31,7 @@ create table if not exists parents (
   student_gmail           text,
   teacher_gmail           text,
   teacher_name            text,
+  password                text,
   joined_at               timestamptz default now(),
   primary key (gmail, student_personal_code)
 );

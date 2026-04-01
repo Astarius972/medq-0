@@ -72,6 +72,14 @@ export default function TeacherDashboard() {
   const [copied, setCopied] = useState(false);
   const router = useRouter();
 
+  // inline login state
+  const [loginGmail, setLoginGmail] = useState("");
+  const [loginPw, setLoginPw] = useState("");
+  const [loginPw2, setLoginPw2] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+
   // assignments state
   const [assignments, setAssignments] = useState([]);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -106,13 +114,18 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     const stored = sessionStorage.getItem("user");
-    if (!stored) { router.push("/"); return; }
+    if (!stored) { setShowLogin(true); return; }
     const parsed = JSON.parse(stored);
-    if (parsed.role !== "teacher") { router.push("/"); return; }
+    if (parsed.role !== "teacher") { setShowLogin(true); return; }
+    fetch("/api/school-code").then(r=>r.json()).then(d=>{
+      parsed.schoolCode = d.code;
+      setUser({...parsed});
+      sessionStorage.setItem("user", JSON.stringify({...parsed}));
+    });
     setUser(parsed);
     fetch(`/api/codes?gmail=${encodeURIComponent(parsed.gmail)}`)
       .then(r => r.json()).then(d => setStudents(d.students || []));
-  }, [router]);
+  }, []);
 
   const loadAssignments = useCallback((gmail) => {
     fetch(`/api/assignments?teacherGmail=${encodeURIComponent(gmail)}`)
@@ -168,8 +181,8 @@ export default function TeacherDashboard() {
   }, [user, loadAllSubmissions]);
 
   function copyCode() {
-    if (!user?.code) return;
-    navigator.clipboard.writeText(user.code);
+    if (!user?.schoolCode) return;
+    navigator.clipboard.writeText(user.schoolCode);
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   }
   function logout() { sessionStorage.removeItem("user"); router.push("/"); }
@@ -285,6 +298,79 @@ export default function TeacherDashboard() {
     }).length;
     return count || null;
   }, [students, allChatMessages]);
+
+  async function handleTeacherLogin(e) {
+    e.preventDefault();
+    setLoginError("");
+    if (!loginGmail.trim() || !loginPw.trim()) { setLoginError("И-мэйл болон нууц үгийг бөглөнө үү"); return; }
+    if (loginPw !== loginPw2) { setLoginError("Нууц үг таарахгүй байна"); return; }
+    setLoginLoading(true);
+    try {
+      const res = await fetch("/api/auth/teacher", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gmail: loginGmail, password: loginPw }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setLoginError(data.error || "Алдаа гарлаа"); return; }
+      const u = { ...data.teacher, role: "teacher" };
+      const scRes = await fetch("/api/school-code");
+      const scData = await scRes.json();
+      u.schoolCode = scData.code;
+      sessionStorage.setItem("user", JSON.stringify(u));
+      setUser(u);
+      setShowLogin(false);
+      fetch(`/api/codes?gmail=${encodeURIComponent(u.gmail)}`)
+        .then(r => r.json()).then(d => setStudents(d.students || []));
+    } catch { setLoginError("Сүлжээний алдаа гарлаа"); }
+    finally { setLoginLoading(false); }
+  }
+
+  if (showLogin && !user) {
+    const pwMatch = loginPw && loginPw2 && loginPw === loginPw2;
+    const pwNoMatch = loginPw && loginPw2 && loginPw !== loginPw2;
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#f97316 0%,#ea580c 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ background: "white", borderRadius: 24, padding: "40px 36px", width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: "#f97316", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
+            </div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#111827" }}>Багшийн нэвтрэх</h1>
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#9ca3af" }}>@olula.edu.mn и-мэйлээр нэвтрэнэ үү</p>
+          </div>
+          <form onSubmit={handleTeacherLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>И-мэйл хаяг</label>
+              <input type="email" placeholder="name@olula.edu.mn" value={loginGmail}
+                onChange={e => setLoginGmail(e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 14, outline: "none", color: "#111827", background: "#f9fafb", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Нууц үг</label>
+              <input type="password" placeholder="Нууц үг" value={loginPw}
+                onChange={e => setLoginPw(e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 14, outline: "none", color: "#111827", background: "#f9fafb", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Нууц үг давтах</label>
+              <input type="password" placeholder="Нууц үгийг дахин оруулна уу" value={loginPw2}
+                onChange={e => setLoginPw2(e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: `1px solid ${pwNoMatch ? "#ef4444" : pwMatch ? "#10b981" : "#e5e7eb"}`, fontSize: 14, outline: "none", color: "#111827", background: "#f9fafb", boxSizing: "border-box" }} />
+              {pwNoMatch && <p style={{ margin: "4px 0 0", fontSize: 12, color: "#ef4444" }}>Нууц үг таарахгүй байна</p>}
+              {pwMatch && <p style={{ margin: "4px 0 0", fontSize: 12, color: "#10b981" }}>Нууц үг таарч байна</p>}
+            </div>
+            {loginError && <p style={{ margin: 0, fontSize: 13, color: "#ef4444", background: "#fef2f2", padding: "10px 14px", borderRadius: 10 }}>{loginError}</p>}
+            <button type="submit" disabled={loginLoading}
+              style={{ padding: "12px 0", borderRadius: 12, fontWeight: 700, fontSize: 15, color: "white", background: "#f97316", border: "none", cursor: "pointer", opacity: loginLoading ? 0.7 : 1, marginTop: 4 }}>
+              {loginLoading ? "Нэвтэрч байна..." : "Нэвтрэх"}
+            </button>
+            <p style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#9ca3af" }}>Анх удаа нэвтрэх үед нууц үг тохируулагдана</p>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) return null;
   const teacherInitial = (user.name || user.gmail)[0].toUpperCase();
@@ -446,8 +532,8 @@ export default function TeacherDashboard() {
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-bold text-gray-900">Шилдэг сурагчид</h2>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">Ангийн код:</span>
-                    <span className="font-black tracking-widest text-sm" style={{ color:"#f97316" }}>{user.code}</span>
+                    <span className="text-xs text-gray-400">Сургуулийн код:</span>
+                    <span className="font-black tracking-widest text-sm" style={{ color:"#f97316" }}>{user.schoolCode || "…"}</span>
                     <button onClick={copyCode} className="text-xs px-2 py-1 rounded-lg font-semibold" style={{ background:"#fff7ed", color:"#f97316" }}>{copied ? "✓" : "Хуулах"}</button>
                   </div>
                 </div>

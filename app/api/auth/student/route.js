@@ -2,7 +2,6 @@ import supabase from "@/lib/supabase";
 import { generateCode } from "@/lib/db";
 
 const THREE_MONTHS_MS = 3 * 30 * 24 * 60 * 60 * 1000;
-
 function isExpired(ts) {
   if (!ts) return true;
   return Date.now() - new Date(ts).getTime() > THREE_MONTHS_MS;
@@ -10,119 +9,91 @@ function isExpired(ts) {
 
 export async function POST(request) {
   const body = await request.json();
-  const { gmail, personalCode, code, grade, lastName, firstName } = body;
+  const { gmail, password, schoolCode, grade, classSection, teacherGmail, lastName, firstName } = body;
 
-  // ── LOGIN mode ──
-  if (personalCode && !code) {
-    if (!gmail) return Response.json({ error: "И-мэйл оруулна уу" }, { status: 400 });
-    const normalized = gmail.toLowerCase().trim();
+  // ── LOGIN mode: email + password ──
+  if (!schoolCode) {
+    if (!gmail || !password)
+      return Response.json({ error: "И-мэйл болон нууц үгээ оруулна уу" }, { status: 400 });
+
     const { data: student } = await supabase
       .from("students")
       .select("*")
-      .eq("gmail", normalized)
-      .eq("personal_code", personalCode.toUpperCase().trim())
+      .eq("gmail", gmail.toLowerCase().trim())
       .maybeSingle();
 
-    if (!student) {
-      return Response.json({ error: "И-мэйл эсвэл хувийн код буруу байна" }, { status: 404 });
-    }
-    if (isExpired(student.joined_at)) {
-      return Response.json(
-        { error: "Таны 3 сарын хугацаа дууссан байна. Багшаасаа шинэ ангийн код авч дахин бүртгүүлнэ үү" },
-        { status: 403 }
-      );
-    }
+    if (!student) return Response.json({ error: "И-мэйл бүртгэлгүй байна" }, { status: 404 });
+    if (student.password && student.password !== password)
+      return Response.json({ error: "Нууц үг буруу байна" }, { status: 401 });
+    if (isExpired(student.joined_at))
+      return Response.json({ error: "Хандалтын хугацаа дууссан. Дахин бүртгүүлнэ үү" }, { status: 403 });
 
     const { data: teacher } = await supabase
-      .from("teachers")
-      .select("gmail, name")
-      .eq("gmail", student.teacher_gmail)
-      .maybeSingle();
+      .from("teachers").select("gmail, name, subject")
+      .eq("gmail", student.teacher_gmail).maybeSingle();
 
-    return Response.json({
-      mode: "login",
-      student: toStudentJS(student),
-      teacher: { name: teacher?.name || student.teacher_gmail, gmail: student.teacher_gmail },
-    });
+    return Response.json({ mode: "login", student: toJS(student), teacher: { name: teacher?.name || student.teacher_gmail, gmail: student.teacher_gmail } });
   }
 
-  // ── REGISTER mode ──
-  if (!gmail || !code || !grade || !lastName || !firstName) {
+  // ── REGISTER mode: school code + info + password ──
+  if (!gmail || !password || !schoolCode || !grade || !lastName || !firstName || !teacherGmail)
     return Response.json({ error: "Бүх талбарыг бөглөнө үү" }, { status: 400 });
-  }
 
-  const upperCode = code.toUpperCase().trim();
-  const { data: teacher } = await supabase
-    .from("teachers")
-    .select("*")
-    .eq("code", upperCode)
-    .maybeSingle();
-
-  if (!teacher) return Response.json({ error: "Ангийн код буруу байна" }, { status: 404 });
-  if (isExpired(teacher.code_created_at)) {
-    return Response.json(
-      { error: "Ангийн кодын хугацаа дууссан байна. Багшаасаа шинэ код авна уу" },
-      { status: 403 }
-    );
-  }
+  if (schoolCode.toUpperCase().trim() !== (process.env.SCHOOL_CODE || "OLULA"))
+    return Response.json({ error: "Сургуулийн код буруу байна" }, { status: 403 });
 
   const normalizedGmail = gmail.toLowerCase().trim();
   const { data: existing } = await supabase
-    .from("students")
-    .select("*")
-    .eq("gmail", normalizedGmail)
-    .eq("code", upperCode)
-    .maybeSingle();
+    .from("students").select("*").eq("gmail", normalizedGmail).maybeSingle();
 
   let student;
   if (!existing) {
-    const newPersonalCode = generateCode();
-    const { data } = await supabase
-      .from("students")
-      .insert({
-        gmail: normalizedGmail,
-        last_name: lastName.trim(),
-        first_name: firstName.trim(),
-        code: upperCode,
-        personal_code: newPersonalCode,
-        grade: Number(grade),
-        teacher_gmail: teacher.gmail,
-        joined_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+    const { data, error } = await supabase.from("students").insert({
+      gmail: normalizedGmail,
+      password,
+      last_name: lastName.trim(),
+      first_name: firstName.trim(),
+      code: schoolCode.toUpperCase().trim(),
+      personal_code: generateCode(),
+      grade: Number(grade),
+      class_section: classSection || "А",
+      teacher_gmail: teacherGmail,
+      joined_at: new Date().toISOString(),
+    }).select().single();
+    if (error || !data) return Response.json({ error: "Бүртгэл хадгалахад алдаа гарлаа: " + (error?.message || "unknown") }, { status: 500 });
     student = data;
   } else {
     const updates = {
+      password,
       grade: Number(grade),
+      class_section: classSection || "А",
       last_name: lastName.trim(),
       first_name: firstName.trim(),
+      teacher_gmail: teacherGmail,
     };
     if (isExpired(existing.joined_at)) {
       updates.joined_at = new Date().toISOString();
       updates.personal_code = generateCode();
     }
     if (!existing.personal_code) updates.personal_code = generateCode();
-
-    const { data } = await supabase
-      .from("students")
-      .update(updates)
-      .eq("gmail", normalizedGmail)
-      .eq("code", upperCode)
-      .select()
-      .single();
+    const { data, error } = await supabase.from("students").update(updates)
+      .eq("gmail", normalizedGmail).select().single();
+    if (error || !data) return Response.json({ error: "Бүртгэл шинэчлэхэд алдаа гарлаа: " + (error?.message || "unknown") }, { status: 500 });
     student = data;
   }
 
+  const { data: teacher } = await supabase
+    .from("teachers").select("gmail, name").eq("gmail", teacherGmail).maybeSingle();
+
   return Response.json({
     mode: "registered",
-    student: toStudentJS(student),
-    teacher: { name: teacher.name, gmail: teacher.gmail },
+    student: toJS(student),
+    teacher: { name: teacher?.name || teacherGmail, gmail: teacherGmail },
     personalCode: student.personal_code,
   });
 }
 
-function toStudentJS(s) {
+function toJS(s) {
   return {
     gmail: s.gmail,
     lastName: s.last_name,
@@ -130,6 +101,7 @@ function toStudentJS(s) {
     code: s.code,
     personalCode: s.personal_code,
     grade: s.grade,
+    classSection: s.class_section,
     teacherGmail: s.teacher_gmail,
     joinedAt: s.joined_at,
   };
