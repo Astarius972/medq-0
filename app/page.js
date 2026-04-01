@@ -8,6 +8,8 @@ export default function Home() {
   const [code, setCode] = useState("");
   const [grade, setGrade] = useState(null);
   const [gradeOpen, setGradeOpen] = useState(false);
+  const [lastName, setLastName] = useState("");
+  const [firstName, setFirstName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -31,7 +33,7 @@ export default function Home() {
         const res = await fetch("/api/auth/student", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gmail, code, grade }),
+          body: JSON.stringify({ gmail, code, grade, lastName, firstName }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
@@ -166,7 +168,7 @@ export default function Home() {
                 <button
                   key={r.value}
                   type="button"
-                  onClick={() => { setRole(r.value); setError(""); setCode(""); setGrade(null); }}
+                  onClick={() => { setRole(r.value); setError(""); setCode(""); setGrade(null); setLastName(""); setFirstName(""); }}
                   className="flex-1 flex items-center justify-center gap-2 py-4 text-lg font-semibold transition-colors"
                   style={
                     role === r.value
@@ -242,16 +244,48 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Овог Нэр — student only */}
+              {role === "student" && (
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-base font-medium text-gray-600 mb-2">Овог</label>
+                    <div className="flex items-center gap-3 rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
+                      <input
+                        type="text"
+                        placeholder="Овог"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-base font-medium text-gray-600 mb-2">Нэр</label>
+                    <div className="flex items-center gap-3 rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
+                      <input
+                        type="text"
+                        placeholder="Нэр"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Gmail */}
               <div>
-                <label className="block text-base font-medium text-gray-600 mb-2">Gmail хаяг</label>
+                <label className="block text-base font-medium text-gray-600 mb-2">И-мэйл хаяг</label>
                 <div className="flex items-center gap-3 rounded-xl px-5 py-4" style={{ background: "#f3f4f6" }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af">
                     <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
                   </svg>
                   <input
                     type="email"
-                    placeholder="example@gmail.com"
+                    placeholder="example@olula.edu.mn"
                     value={gmail}
                     onChange={(e) => setGmail(e.target.value)}
                     className="bg-transparent flex-1 text-lg text-gray-700 outline-none placeholder-gray-400"

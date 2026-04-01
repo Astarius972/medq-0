@@ -57,7 +57,7 @@ export default function StudentDashboard() {
         >
           <div>
             <p className="text-cyan-100 text-sm mb-1">Тавтай морилно уу</p>
-            <h1 className="text-white text-3xl font-black mb-1">{user.gmail.split("@")[0]}</h1>
+            <h1 className="text-white text-3xl font-black mb-1">{user.lastName} {user.firstName}</h1>
             <p className="text-cyan-200 text-sm">{user.gmail}</p>
           </div>
           <div

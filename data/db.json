@@ -1,14 +1,9 @@
 {
   "teachers": [
     {
-      "gmail": "uchralmunkhbold@gmail.com",
-      "name": "Багш 1",
-      "code": "QH4U7A"
-    },
-    {
-      "gmail": "teacher@gmail.com",
-      "name": "Teacher",
-      "code": null
+      "gmail": "oyunbileg.g@olula.edu.mn",
+      "name": "oyunbileg.g",
+      "code": "420OPH"
     }
   ],
   "students": [
@@ -17,7 +12,39 @@
       "code": "QH4U7A",
       "teacherGmail": "uchralmunkhbold@gmail.com",
       "joinedAt": "2026-04-01T04:24:06.655Z",
-      "grade": 12
+      "grade": 3
+    },
+    {
+      "gmail": "xoxo@gmail.com",
+      "code": "420OPH",
+      "grade": 2,
+      "teacherGmail": "oyunbileg.g@olula.edu.mn",
+      "joinedAt": "2026-04-01T05:23:30.869Z"
+    },
+    {
+      "gmail": "uchralmunkhbold@gmail.com",
+      "code": "420OPH",
+      "grade": 1,
+      "teacherGmail": "oyunbileg.g@olula.edu.mn",
+      "joinedAt": "2026-04-01T05:24:16.137Z"
+    },
+    {
+      "gmail": "lol@gmail.com",
+      "code": "420OPH",
+      "grade": 12,
+      "teacherGmail": "oyunbileg.g@olula.edu.mn",
+      "joinedAt": "2026-04-01T05:28:00.513Z",
+      "lastName": "aaaa",
+      "firstName": "oooo"
+    },
+    {
+      "gmail": "zzz@gmail.com",
+      "lastName": "eee",
+      "firstName": "uuuu",
+      "code": "420OPH",
+      "grade": 6,
+      "teacherGmail": "oyunbileg.g@olula.edu.mn",
+      "joinedAt": "2026-04-01T05:41:56.798Z"
     }
   ]
 }
