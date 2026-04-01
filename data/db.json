@@ -31,11 +31,11 @@
     {
       "gmail": "lol@gmail.com",
       "code": "420OPH",
-      "grade": 12,
+      "grade": 10,
       "teacherGmail": "oyunbileg.g@olula.edu.mn",
       "joinedAt": "2026-04-01T05:28:00.513Z",
-      "lastName": "aaaa",
-      "firstName": "oooo"
+      "lastName": "3333",
+      "firstName": "4444"
     },
     {
       "gmail": "zzz@gmail.com",
@@ -96,9 +96,18 @@
       "lastName": "3333",
       "firstName": "4444",
       "code": "420OPH",
-      "grade": 6,
+      "grade": 2,
       "teacherGmail": "oyunbileg.g@olula.edu.mn",
       "joinedAt": "2026-04-01T07:01:47.756Z"
+    },
+    {
+      "gmail": "zaz@gmail.com",
+      "lastName": "3333",
+      "firstName": "4444",
+      "code": "420OPH",
+      "grade": 1,
+      "teacherGmail": "oyunbileg.g@olula.edu.mn",
+      "joinedAt": "2026-04-01T07:15:36.293Z"
     }
   ],
   "assignments": [
@@ -151,6 +160,16 @@
       "deadline": "2026-04-04T04:36",
       "points": 10,
       "createdAt": "2026-04-01T06:36:27.472Z"
+    },
+    {
+      "id": "b8707834-7ada-45ec-8459-ffa140a32d17",
+      "teacherGmail": "oyunbileg.g@olula.edu.mn",
+      "grade": 8,
+      "title": "aa",
+      "description": "",
+      "deadline": "2026-04-03T16:36",
+      "points": 90,
+      "createdAt": "2026-04-01T07:37:19.484Z"
     }
   ],
   "messages": [
@@ -258,6 +277,48 @@
       "toGmail": "oyunbileg.g@olula.edu.mn",
       "text": "a",
       "sentAt": "2026-04-01T07:02:44.810Z"
+    },
+    {
+      "id": "a698deed-a5b8-40e2-a773-38d02600e1fc",
+      "fromGmail": "oyunbileg.g@olula.edu.mn",
+      "toGmail": "xoxo@gmail.com",
+      "text": "adoaodoahdia",
+      "sentAt": "2026-04-01T07:20:05.313Z"
+    },
+    {
+      "id": "342c3a19-7461-482d-95d0-5048341ece99",
+      "fromGmail": "oyunbileg.g@olula.edu.mn",
+      "toGmail": "xoxo@gmail.com",
+      "text": "a",
+      "sentAt": "2026-04-01T07:20:05.645Z"
+    },
+    {
+      "id": "cb517275-cac3-4dc9-91d1-64914fdaf3ae",
+      "fromGmail": "oyunbileg.g@olula.edu.mn",
+      "toGmail": "xoxo@gmail.com",
+      "text": "a",
+      "sentAt": "2026-04-01T07:20:05.804Z"
+    },
+    {
+      "id": "e8af51f9-b216-4efd-8339-85fd6eed1c08",
+      "fromGmail": "oyunbileg.g@olula.edu.mn",
+      "toGmail": "xoxo@gmail.com",
+      "text": "a",
+      "sentAt": "2026-04-01T07:20:05.921Z"
+    },
+    {
+      "id": "5e3d7bd2-f6c4-4df0-8dda-fea28099da09",
+      "fromGmail": "oyunbileg.g@olula.edu.mn",
+      "toGmail": "xoxo@gmail.com",
+      "text": "a",
+      "sentAt": "2026-04-01T07:20:06.045Z"
+    },
+    {
+      "id": "8bd0d3a1-d87e-4ad8-9501-3c04f0da1369",
+      "fromGmail": "oyunbileg.g@olula.edu.mn",
+      "toGmail": "xoxo@gmail.com",
+      "text": "a",
+      "sentAt": "2026-04-01T07:20:06.159Z"
     }
   ],
   "submissions": [
@@ -280,6 +341,25 @@
       "submittedAt": "2026-04-01T06:37:03.319Z",
       "score": 1,
       "gradedAt": "2026-04-01T06:37:46.262Z"
+    },
+    {
+      "id": "efb0b454-47c4-486e-9101-4cdf1e520d0d",
+      "assignmentId": "48ea5388-859f-49b2-9177-e23b42197622",
+      "studentGmail": "zaz@gmail.com",
+      "text": "zzc",
+      "filePath": "/uploads/917f81dc-acf7-45d4-9169-f3366de78d7f.jpg",
+      "submittedAt": "2026-04-01T07:19:23.949Z",
+      "score": 0,
+      "gradedAt": "2026-04-01T07:19:50.250Z"
+    }
+  ],
+  "parents": [
+    {
+      "gmail": "parent@gmail.com",
+      "code": "420OPH",
+      "teacherGmail": "oyunbileg.g@olula.edu.mn",
+      "teacherName": "oyunbileg.g",
+      "joinedAt": "2026-04-01T07:09:28.055Z"
     }
   ]
 }
