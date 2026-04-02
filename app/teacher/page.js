@@ -155,6 +155,9 @@ export default function TeacherDashboard() {
   const seenMsgIds = useRef(new Set());
   const selectedChatStudentRef = useRef(null);
 
+  // image lightbox (submission viewer)
+  const [lightboxUrl, setLightboxUrl] = useState(null);
+
   // research
   const [researchTopic, setResearchTopic] = useState("");
   const [researchResult, setResearchResult] = useState(null);
@@ -318,18 +321,31 @@ export default function TeacherDashboard() {
             seenMsgIds.current.add(m.id);
             const student = studentsRef.current.find(s => s.gmail === m.fromGmail);
             const nid = m.id;
-            // don't notify if already viewing that student's chat
             if (selectedChatStudentRef.current?.gmail === m.fromGmail && activeNav === "chat") return;
             setChatNotifications(prev => [...prev, { nid, student, text: m.text }]);
             setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
+            // Browser notification
+            if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+              new Notification("Анги платформ — Шинэ мессеж", {
+                body: `${student?.firstName || m.fromGmail}: ${m.text}`,
+                icon: "/favicon.ico",
+              });
+            }
           });
         }
         setAllChatMessages(msgs);
       });
     load(true);
-    const iv = setInterval(() => load(false), 5000);
+    const iv = setInterval(() => load(false), 2000);
     return () => clearInterval(iv);
   }, [user, activeNav]);
+
+  // Request browser notification permission
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   async function handleSendChat(e) {
     e.preventDefault();
@@ -574,11 +590,19 @@ export default function TeacherDashboard() {
                               <p className="text-xs text-gray-400">{asgn?.title || "Даалгавар"} • {relTime(sub.submittedAt)}</p>
                             </div>
                             {sub.filePath && (
-                              <a href={sub.filePath} target="_blank" rel="noreferrer"
-                                className="text-xs px-2 py-1 rounded-lg shrink-0"
-                                style={{ background:"#eff6ff", color:"#3b82f6" }}>
-                                {isImg ? "Зураг" : "Файл"}
-                              </a>
+                              isImg ? (
+                                <button type="button" onClick={() => setLightboxUrl(sub.filePath)}
+                                  className="text-xs px-2 py-1 rounded-lg shrink-0"
+                                  style={{ background:"#eff6ff", color:"#3b82f6", border:"none", cursor:"zoom-in" }}>
+                                  Зураг
+                                </button>
+                              ) : (
+                                <a href={sub.filePath} target="_blank" rel="noreferrer"
+                                  className="text-xs px-2 py-1 rounded-lg shrink-0"
+                                  style={{ background:"#eff6ff", color:"#3b82f6" }}>
+                                  Файл
+                                </a>
+                              )
                             )}
                             {sub.score !== null
                               ? <span className="text-sm font-black shrink-0" style={{ color:"#f97316" }}>{sub.score}%</span>
@@ -786,7 +810,10 @@ export default function TeacherDashboard() {
                               {sub.filePath && (
                                 <div>
                                   {isImg ? (
-                                    <img src={sub.filePath} alt="submission" className="rounded-xl max-h-72 object-contain border border-gray-100"/>
+                                    <button type="button" onClick={() => setLightboxUrl(sub.filePath)}
+                                      className="block w-full text-left" style={{ border:"none", background:"none", padding:0, cursor:"zoom-in" }}>
+                                      <img src={sub.filePath} alt="submission" className="rounded-xl max-h-72 object-contain border border-gray-100 hover:opacity-90 transition-opacity"/>
+                                    </button>
                                   ) : (
                                     <a href={sub.filePath} target="_blank" rel="noreferrer"
                                       className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-xl"
@@ -1180,6 +1207,38 @@ export default function TeacherDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===== IMAGE LIGHTBOX ===== */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center"
+          style={{ background:"rgba(0,0,0,0.85)", backdropFilter:"blur(4px)" }}
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div className="relative max-w-4xl w-full mx-4" onClick={e => e.stopPropagation()}>
+            <img
+              src={lightboxUrl}
+              alt="Илгээлт"
+              style={{ width:"100%", maxHeight:"85vh", objectFit:"contain", borderRadius:16, boxShadow:"0 25px 60px rgba(0,0,0,0.5)" }}
+            />
+            <a
+              href={lightboxUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ position:"absolute", bottom:16, left:"50%", transform:"translateX(-50%)", background:"rgba(255,255,255,0.15)", color:"white", borderRadius:99, padding:"8px 20px", fontSize:13, fontWeight:600, textDecoration:"none", backdropFilter:"blur(8px)", border:"1px solid rgba(255,255,255,0.2)" }}
+            >
+              Бүтэн хэмжээгээр нээх ↗
+            </a>
+            <button
+              onClick={() => setLightboxUrl(null)}
+              style={{ position:"absolute", top:-16, right:-16, width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.2)", border:"none", cursor:"pointer", color:"white", fontSize:20, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(8px)" }}
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}

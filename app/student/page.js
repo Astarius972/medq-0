@@ -117,14 +117,25 @@ export default function StudentDashboard() {
               const nid = m.id;
               setChatNotifications(prev => [...prev, { nid, text: m.text }]);
               setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
+              // Browser notification
+              if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+                new Notification("Анги платформ — Шинэ мессеж", { body: m.text, icon: "/favicon.ico" });
+              }
             });
             if (fresh.length) setChatMessages(msgs);
           }
         });
     poll(true);
-    const iv = setInterval(() => poll(false), 5000);
+    const iv = setInterval(() => poll(false), 2000);
     return () => clearInterval(iv);
   }, [user, selectedTeacherGmail]);
+
+  // Browser notification permission
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
