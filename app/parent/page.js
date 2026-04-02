@@ -54,7 +54,6 @@ export default function ParentDashboard() {
   const [user, setUser] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
-  const [messages, setMessages] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const router = useRouter();
 
@@ -71,13 +70,10 @@ export default function ParentDashboard() {
     Promise.all([
       fetch(`/api/assignments?grade=${s.grade}`).then(r=>r.json()),
       fetch(`/api/submissions?studentGmail=${encodeURIComponent(s.gmail)}`).then(r=>r.json()),
-      fetch(`/api/chat?studentGmail=${encodeURIComponent(s.gmail)}&teacherGmail=${encodeURIComponent(s.teacherGmail||"")}`).then(r=>r.json()),
       fetch("/api/teachers").then(r=>r.json()),
-    ]).then(([aD,sD,mD,tD]) => {
+    ]).then(([aD,sD,tD]) => {
       setAssignments(aD.assignments||[]);
       setSubmissions(sD.submissions||[]);
-      // messages from teachers to student
-      setMessages((mD.messages||[]).filter(m=>m.fromGmail!==s.gmail));
       setTeachers(tD.teachers||[]);
     });
   }, [router]);
@@ -120,25 +116,6 @@ export default function ParentDashboard() {
     .filter(a=>!isPast(a.deadline))
     .sort((a,b)=>new Date(a.deadline)-new Date(b.deadline))
     .slice(0,3);
-
-  // recent graded with assignment info
-  const recentGraded = [...gradedSubs]
-    .sort((a,b)=>new Date(b.gradedAt)-new Date(a.gradedAt))
-    .slice(0,4)
-    .map(sub=>{
-      const asgn=assignments.find(a=>a.id===sub.assignmentId);
-      const tName=teachers.find(t=>t.gmail===asgn?.teacherGmail)?.name||asgn?.teacherGmail?.split("@")[0]||"Багш";
-      return {...sub,assignment:asgn,teacherName:tName,color:teacherColor(asgn?.teacherGmail)};
-    });
-
-  // teacher notifications from messages
-  const notifications = [...messages]
-    .sort((a,b)=>new Date(b.sentAt)-new Date(a.sentAt))
-    .slice(0,3)
-    .map(m=>{
-      const t=teachers.find(t=>t.gmail===m.fromGmail);
-      return {...m,teacherName:t?.name||m.fromGmail.split("@")[0],color:teacherColor(m.fromGmail)};
-    });
 
   const scoreColor = (s) => s>=80?"#7c3aed":s>=60?"#06b6d4":"#f97316";
 
@@ -249,51 +226,51 @@ export default function ParentDashboard() {
             {/* Left column */}
             <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
-              {/* Teacher notifications */}
-              {notifications.length>0&&(
-                <div style={{background:"white",borderRadius:16,padding:"20px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-                    <p style={{margin:0,fontWeight:700,fontSize:15,color:"#111827"}}>Багшийн мэдэгдэл ба сануулга</p>
-                    <span style={{background:"#fef3c7",color:"#d97706",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99}}>{notifications.length} мэдэгдэл</span>
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {notifications.map(m=>(
-                      <div key={m.id} style={{borderLeft:`3px solid ${m.color}`,paddingLeft:14,paddingTop:10,paddingBottom:10,paddingRight:14,borderRadius:"0 10px 10px 0",background:"#fafafa"}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
-                          <p style={{margin:0,fontWeight:700,fontSize:13,color:"#111827"}}>{m.teacherName}</p>
-                          <span style={{background:`${m.color}20`,color:m.color,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99}}>Мэдэгдэл</span>
-                        </div>
-                        <p style={{margin:"0 0 4px",fontSize:13,color:"#374151"}}>{m.text}</p>
-                        <p style={{margin:0,fontSize:11,color:"#9ca3af"}}>{relTime(m.sentAt)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Recent graded */}
+              {/* All assignments with grades */}
               <div style={{background:"white",borderRadius:16,padding:"20px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-                  <p style={{margin:0,fontWeight:700,fontSize:15,color:"#111827"}}>Сүүлийн даалгаврын үр дүн</p>
+                  <p style={{margin:0,fontWeight:700,fontSize:15,color:"#111827"}}>Даалгаврын үнэлгээ</p>
+                  <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99}}>{assignments.length} нийт</span>
                 </div>
-                {recentGraded.length===0?(
-                  <p style={{textAlign:"center",color:"#d1d5db",fontSize:13,padding:"24px 0",margin:0}}>Үнэлгээтэй ажил байхгүй</p>
+                {assignments.length===0?(
+                  <p style={{textAlign:"center",color:"#d1d5db",fontSize:13,padding:"24px 0",margin:0}}>Даалгавар байхгүй</p>
                 ):(
-                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                    {recentGraded.map(sub=>(
-                      <div key={sub.id} style={{padding:"14px 16px",borderRadius:12,background:"#fafafa",border:"1px solid #f1f5f9"}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                          <div>
-                            <p style={{margin:0,fontWeight:700,fontSize:14,color:"#111827"}}>{sub.assignment?.title||"Даалгавар"}</p>
-                            <p style={{margin:"2px 0 0",fontSize:12,color:"#9ca3af"}}>{sub.teacherName} · {fmtDate(sub.assignment?.deadline)}</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {[...assignments].sort((a,b)=>new Date(b.deadline)-new Date(a.deadline)).map(a=>{
+                      const sub=submissions.find(s=>s.assignmentId===a.id);
+                      const tName=teachers.find(t=>t.gmail===a.teacherGmail)?.name||a.teacherGmail?.split("@")[0]||"Багш";
+                      const color=teacherColor(a.teacherGmail);
+                      const past=isPast(a.deadline);
+                      return(
+                        <div key={a.id} style={{padding:"14px 16px",borderRadius:12,background:"#fafafa",border:"1px solid #f1f5f9",borderLeft:`3px solid ${color}`}}>
+                          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <p style={{margin:0,fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.title}</p>
+                              <p style={{margin:"2px 0 0",fontSize:12,color:"#9ca3af"}}>{tName} · {fmtDate(a.deadline)}</p>
+                            </div>
+                            <div style={{flexShrink:0,textAlign:"right"}}>
+                              {sub?.score!==null&&sub?.score!==undefined?(
+                                <>
+                                  <p style={{margin:0,fontSize:22,fontWeight:900,color:scoreColor(sub.score)}}>{sub.score}%</p>
+                                  <p style={{margin:0,fontSize:10,color:"#9ca3af"}}>{a.points} оноо</p>
+                                </>
+                              ):sub?(
+                                <span style={{background:"#dcfce7",color:"#16a34a",fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:99}}>✓ Илгээсэн</span>
+                              ):past?(
+                                <span style={{background:"#fee2e2",color:"#ef4444",fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:99}}>Илгээгээгүй</span>
+                              ):(
+                                <span style={{background:"#fff7ed",color:"#f97316",fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:99}}>Хүлээгдэж буй</span>
+                              )}
+                            </div>
                           </div>
-                          <span style={{fontSize:22,fontWeight:900,color:scoreColor(sub.score)}}>{sub.score}/100</span>
+                          {sub?.score!==null&&sub?.score!==undefined&&(
+                            <div style={{height:5,borderRadius:99,background:"#f1f5f9",overflow:"hidden",marginTop:10}}>
+                              <div style={{height:"100%",borderRadius:99,width:`${sub.score}%`,background:scoreColor(sub.score)}}/>
+                            </div>
+                          )}
                         </div>
-                        <div style={{height:6,borderRadius:99,background:"#f1f5f9",overflow:"hidden",marginBottom:8}}>
-                          <div style={{height:"100%",borderRadius:99,width:`${sub.score}%`,background:scoreColor(sub.score)}}/>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

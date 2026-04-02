@@ -8,20 +8,33 @@ export async function GET(request) {
     const studentGmail = searchParams.get("studentGmail");
 
     if (teacherGmail && studentGmail) {
-      const [r1, r2] = await Promise.all([
-        supabase.from("messages").select("*").eq("from_gmail", teacherGmail).eq("to_gmail", studentGmail),
-        supabase.from("messages").select("*").eq("from_gmail", studentGmail).eq("to_gmail", teacherGmail),
+      const tg = teacherGmail.toLowerCase().trim();
+      const sg = studentGmail.toLowerCase().trim();
+
+      // Fetch by each sender separately — single .eq() is most reliable
+      const [fromTeacher, fromStudent] = await Promise.all([
+        supabase.from("messages").select("*").eq("from_gmail", tg),
+        supabase.from("messages").select("*").eq("from_gmail", sg),
       ]);
-      const data = [...(r1.data || []), ...(r2.data || [])].sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at));
+
+      const data = [
+        ...(fromTeacher.data || []).filter(m => m.to_gmail?.toLowerCase().trim() === sg),
+        ...(fromStudent.data || []).filter(m => m.to_gmail?.toLowerCase().trim() === tg),
+      ].sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at));
+
       return Response.json({ messages: data.map(toMsgJS) });
     }
 
     if (teacherGmail) {
-      const [r1, r2] = await Promise.all([
-        supabase.from("messages").select("*").eq("from_gmail", teacherGmail),
-        supabase.from("messages").select("*").eq("to_gmail", teacherGmail),
+      const tg = teacherGmail.toLowerCase().trim();
+      const [sent, received] = await Promise.all([
+        supabase.from("messages").select("*").eq("from_gmail", tg),
+        supabase.from("messages").select("*").eq("to_gmail", tg),
       ]);
-      const data = [...(r1.data || []), ...(r2.data || [])].sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at));
+      const seen = new Set();
+      const data = [...(sent.data || []), ...(received.data || [])]
+        .filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; })
+        .sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at));
       return Response.json({ messages: data.map(toMsgJS) });
     }
 
@@ -39,8 +52,11 @@ export async function POST(request) {
       return Response.json({ error: "Мэдээлэл дутуу байна" }, { status: 400 });
 
     const { data, error } = await supabase.from("messages").insert({
-      id: randomUUID(), from_gmail: fromGmail, to_gmail: toGmail,
-      text: text.trim(), sent_at: new Date().toISOString(),
+      id: randomUUID(),
+      from_gmail: fromGmail.toLowerCase().trim(),
+      to_gmail: toGmail.toLowerCase().trim(),
+      text: text.trim(),
+      sent_at: new Date().toISOString(),
     }).select().single();
 
     if (error || !data)
