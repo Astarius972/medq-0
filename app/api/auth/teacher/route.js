@@ -1,8 +1,8 @@
 import supabase from "@/lib/supabase";
 import { generateCode } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 const THREE_MONTHS_MS = 3 * 30 * 24 * 60 * 60 * 1000;
-
 function isCodeExpired(ts) {
   if (!ts) return true;
   return Date.now() - new Date(ts).getTime() > THREE_MONTHS_MS;
@@ -25,9 +25,10 @@ export async function POST(request) {
 
     if (!teacher) {
       const name = normalized.split("@")[0];
+      const hashed = await bcrypt.hash(password.trim(), 10);
       const { data: created, error } = await supabase.from("teachers").insert({
         gmail: normalized, name,
-        password: password.trim(),
+        password: hashed,
         code: generateCode(),
         code_created_at: new Date().toISOString(),
       }).select().single();
@@ -36,11 +37,22 @@ export async function POST(request) {
       return Response.json({ teacher: { gmail: created.gmail, name: created.name, code: created.code } });
     }
 
-    if (teacher.password && teacher.password !== password.trim())
+    const pwOk = teacher.password
+      ? await bcrypt.compare(password.trim(), teacher.password)
+      : false;
+
+    // хуучин plain-text нууц үгтэй бол автоматаар hash болгоно
+    const isLegacyPlain = teacher.password && !teacher.password.startsWith("$2");
+    if (isLegacyPlain) {
+      if (teacher.password !== password.trim())
+        return Response.json({ error: "Нууц үг буруу байна" }, { status: 401 });
+    } else if (!pwOk) {
       return Response.json({ error: "Нууц үг буруу байна" }, { status: 401 });
+    }
 
     const updates = {};
-    if (!teacher.password) updates.password = password.trim();
+    if (!teacher.password || isLegacyPlain)
+      updates.password = await bcrypt.hash(password.trim(), 10);
     if (isCodeExpired(teacher.code_created_at)) {
       updates.code = generateCode();
       updates.code_created_at = new Date().toISOString();

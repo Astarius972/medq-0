@@ -1,4 +1,7 @@
 import supabase from "@/lib/supabase";
+import bcrypt from "bcryptjs";
+
+function isLegacyPlain(hash) { return hash && !hash.startsWith("$2"); }
 
 export async function POST(request) {
   try {
@@ -9,14 +12,23 @@ export async function POST(request) {
 
     const normalizedGmail = gmail.toLowerCase().trim();
 
-    // ── LOGIN mode ──
+    // ── LOGIN ──
     if (!studentPersonalCode) {
       const { data: parent } = await supabase
         .from("parents").select("*").eq("gmail", normalizedGmail).maybeSingle();
 
       if (!parent) return Response.json({ error: "И-мэйл бүртгэлгүй байна. Эхлээд бүртгүүлнэ үү" }, { status: 404 });
-      if (parent.password && parent.password !== password)
-        return Response.json({ error: "Нууц үг буруу байна" }, { status: 401 });
+
+      if (parent.password) {
+        const ok = isLegacyPlain(parent.password)
+          ? parent.password === password
+          : await bcrypt.compare(password, parent.password);
+        if (!ok) return Response.json({ error: "Нууц үг буруу байна" }, { status: 401 });
+        if (isLegacyPlain(parent.password)) {
+          const hashed = await bcrypt.hash(password, 10);
+          await supabase.from("parents").update({ password: hashed }).eq("gmail", normalizedGmail);
+        }
+      }
 
       const { data: student } = await supabase
         .from("students").select("*").eq("gmail", parent.student_gmail).maybeSingle();
@@ -30,7 +42,7 @@ export async function POST(request) {
       });
     }
 
-    // ── REGISTER mode ──
+    // ── REGISTER ──
     const upperCode = studentPersonalCode.toUpperCase().trim();
     const { data: student } = await supabase
       .from("students").select("*").eq("personal_code", upperCode).maybeSingle();
@@ -43,10 +55,12 @@ export async function POST(request) {
     const { data: existing } = await supabase
       .from("parents").select("*").eq("gmail", normalizedGmail).maybeSingle();
 
+    const hashed = await bcrypt.hash(password, 10);
+
     let parent;
     if (!existing) {
       const { data, error } = await supabase.from("parents").insert({
-        gmail: normalizedGmail, password,
+        gmail: normalizedGmail, password: hashed,
         student_personal_code: upperCode,
         student_gmail: student.gmail,
         teacher_gmail: student.teacher_gmail,
@@ -58,7 +72,7 @@ export async function POST(request) {
       parent = data;
     } else {
       const { data, error } = await supabase.from("parents")
-        .update({ password, student_personal_code: upperCode, student_gmail: student.gmail, teacher_gmail: student.teacher_gmail })
+        .update({ password: hashed, student_personal_code: upperCode, student_gmail: student.gmail, teacher_gmail: student.teacher_gmail })
         .eq("gmail", normalizedGmail).select().single();
       if (error || !data)
         return Response.json({ error: "Бүртгэл шинэчлэхэд алдаа гарлаа: " + (error?.message || "unknown") }, { status: 500 });
