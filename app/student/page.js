@@ -29,6 +29,7 @@ export default function StudentDashboard() {
   const [aiMessages, setAiMessages] = useState([]); // { role:"user"|"assistant", content }
   const [aiInput, setAiInput] = useState("");
   const [aiSending, setAiSending] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState("");
 
   useEffect(() => {
     const stored = sessionStorage.getItem("user");
@@ -465,6 +466,10 @@ export default function StudentDashboard() {
                                     {urgent && !sub && <span style={{ background: "#f97316", color: "white", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>Яаралтай</span>}
                                   </div>
                                   {a.description && <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>{a.description}</p>}
+                                  {a.imageUrl && (
+                                    <img src={a.imageUrl} alt="task" onClick={() => setLightboxUrl(a.imageUrl)}
+                                      style={{ marginTop: 8, maxHeight: 120, borderRadius: 8, cursor: "pointer", objectFit: "cover" }}/>
+                                  )}
                                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 12, color: "#9ca3af" }}>
                                     <span>Хугацаа: {fmtDate(a.deadline)}</span>
                                     <span>•</span>
@@ -764,6 +769,19 @@ export default function StudentDashboard() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* ===== IMAGE LIGHTBOX ===== */}
+      {lightboxUrl && (
+        <div onClick={() => setLightboxUrl("")}
+          style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, cursor: "zoom-out" }}>
+          <img src={lightboxUrl} alt="task" onClick={e => e.stopPropagation()}
+            style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: 12, boxShadow: "0 8px 48px rgba(0,0,0,0.6)", cursor: "default" }}/>
+          <button onClick={() => setLightboxUrl("")}
+            style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", color: "white", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            ✕
+          </button>
         </div>
       )}
     </div>

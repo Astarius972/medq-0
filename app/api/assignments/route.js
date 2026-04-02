@@ -58,7 +58,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const { teacherGmail, grade, title, description, deadline, points } = await request.json();
+  const { teacherGmail, grade, title, description, deadline, points, imageUrl } = await request.json();
 
   if (!teacherGmail || !grade || !title || !deadline) {
     return Response.json({ error: "Бүх талбарыг бөглөнө үү" }, { status: 400 });
@@ -74,6 +74,7 @@ export async function POST(request) {
       description: (description || "").trim(),
       deadline,
       points: Number(points) || 100,
+      image_url: imageUrl || null,
       created_at: new Date().toISOString(),
     })
     .select()
@@ -91,6 +92,7 @@ function toAssignmentJS(a) {
     description: a.description,
     deadline: a.deadline,
     points: a.points,
+    imageUrl: a.image_url || null,
     createdAt: a.created_at,
   };
 }

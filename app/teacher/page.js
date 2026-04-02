@@ -26,7 +26,7 @@ const NAV = [
   { key:"research", label:"AI Судалгаа", badge:null, icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg> },
 ];
 
-const EMPTY_FORM = { title:"", description:"", grade:"", deadline:"", points:100 };
+const EMPTY_FORM = { title:"", description:"", grade:"", deadline:"", points:100, imageUrl:"" };
 
 function NotifCard({ n, onClose }) {
   const [visible, setVisible] = useState(false);
@@ -90,6 +90,8 @@ export default function TeacherDashboard() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
 
   // grade modal
   const [gradeTarget, setGradeTarget] = useState(null);
@@ -199,14 +201,23 @@ export default function TeacherDashboard() {
     e.preventDefault();
     setCreateError(""); setCreating(true);
     try {
+      let imageUrl = "";
+      if (imageFile) {
+        const fd = new FormData();
+        fd.append("file", imageFile);
+        const upRes = await fetch("/api/upload", { method: "POST", body: fd });
+        const upData = await upRes.json();
+        if (!upRes.ok) throw new Error(upData.error);
+        imageUrl = upData.url;
+      }
       const res = await fetch("/api/assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, teacherGmail: user.gmail, points: Number(form.points) }),
+        body: JSON.stringify({ ...form, teacherGmail: user.gmail, points: Number(form.points), imageUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setShowCreate(false); setForm(EMPTY_FORM);
+      setShowCreate(false); setForm(EMPTY_FORM); setImageFile(null); setImagePreview("");
       loadAssignments(user.gmail);
     } catch(err) { setCreateError(err.message); }
     finally { setCreating(false); }
@@ -579,7 +590,7 @@ export default function TeacherDashboard() {
                     <h2 className="font-bold text-gray-900 text-lg">Даалгаврууд</h2>
                     <p className="text-xs text-gray-400">Даалгавар үүсгэх, үнэлэх</p>
                   </div>
-                  <button onClick={() => { setShowCreate(true); setCreateError(""); setForm(EMPTY_FORM); }}
+                  <button onClick={() => { setShowCreate(true); setCreateError(""); setForm(EMPTY_FORM); setImageFile(null); setImagePreview(""); }}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white"
                     style={{ background:"#f97316" }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -1017,6 +1028,32 @@ export default function TeacherDashboard() {
                 <textarea placeholder="Даалгаврын дэлгэрэнгүй тайлбар..." rows={3} value={form.description}
                   onChange={e => setForm(f=>({...f, description:e.target.value}))}
                   className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none" style={{ background:"#f3f4f6" }}/>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Зураг (заавал биш)</label>
+                {imagePreview ? (
+                  <div className="relative">
+                    <img src={imagePreview} alt="preview" className="w-full rounded-xl object-cover" style={{ maxHeight:180 }}/>
+                    <button type="button" onClick={() => { setImageFile(null); setImagePreview(""); }}
+                      className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white"
+                      style={{ background:"rgba(0,0,0,0.5)" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-2 w-full rounded-xl cursor-pointer"
+                    style={{ background:"#f3f4f6", border:"2px dashed #d1d5db", minHeight:80 }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#9ca3af"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                    <span className="text-xs text-gray-400">Зураг сонгох</span>
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        setImageFile(f);
+                        setImagePreview(URL.createObjectURL(f));
+                      }}/>
+                  </label>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
