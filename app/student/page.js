@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { isPast, fmtDate, timeLeft, relTime } from "@/lib/formatters";
 
@@ -89,25 +89,33 @@ export default function StudentDashboard() {
 
   useEffect(() => { userRef.current = user; }, [user]);
 
-  const loadChat = useCallback((studentGmail, teacherGmail) => {
-    if (!teacherGmail) return;
-    fetch(`/api/chat?studentGmail=${encodeURIComponent(studentGmail)}&teacherGmail=${encodeURIComponent(teacherGmail)}`)
-      .then(r => r.json()).then(d => setChatMessages(d.messages || []));
-  }, []);
 
+  // background chat polling — runs always, fires toast on new teacher messages (2 min window)
   useEffect(() => {
     if (!user || !selectedTeacherGmail) return;
-    setChatMessages([]);
-    loadChat(user.gmail, selectedTeacherGmail);
-  }, [user, selectedTeacherGmail, loadChat]);
-
-  // background chat polling — runs always, fires toast on new teacher messages
-  useEffect(() => {
-    if (!user || !selectedTeacherGmail) return;
-    const poll = (isFirst) =>
+    const TWO_MIN = 2 * 60 * 1000;
+    const poll = () =>
       fetch(`/api/chat?studentGmail=${encodeURIComponent(user.gmail)}&teacherGmail=${encodeURIComponent(selectedTeacherGmail)}`)
         .then(r => r.json()).then(d => {
           const msgs = d.messages || [];
+<<<<<<< HEAD
+          const now = Date.now();
+          const fresh = msgs.filter(m =>
+            !seenMsgIds.current.has(m.id) &&
+            m.fromGmail !== user.gmail &&
+            now - new Date(m.sentAt).getTime() < TWO_MIN
+          );
+          msgs.forEach(m => seenMsgIds.current.add(m.id));
+          fresh.forEach(m => {
+            const nid = m.id;
+            setChatNotifications(prev => [...prev, { nid, text: m.text }]);
+            setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
+          });
+          setChatMessages(msgs);
+        });
+    poll();
+    const iv = setInterval(poll, 3000);
+=======
           if (isFirst) {
             msgs.forEach(m => seenMsgIds.current.add(m.id));
           } else {
@@ -127,6 +135,7 @@ export default function StudentDashboard() {
         });
     poll(true);
     const iv = setInterval(() => poll(false), 2000);
+>>>>>>> 3861294500025a43c819e9e269e773d27be7c8e6
     return () => clearInterval(iv);
   }, [user, selectedTeacherGmail]);
 
