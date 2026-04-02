@@ -207,33 +207,32 @@ export default function TeacherDashboard() {
     fetch(`/api/submissions?teacherGmail=${encodeURIComponent(gmail)}`).then(r => r.json()).then(d => d.submissions || [])
   , []);
 
-  // initial load — mark existing as seen so they don't fire notifications
+  // seed then poll every 10s — single effect so seeding always completes before first poll
   useEffect(() => {
     if (!user) return;
+    let mounted = true;
+    let iv = null;
     loadAllSubmissions(user.gmail).then(subs => {
+      if (!mounted) return;
       subs.forEach(s => seenIds.current.add(s.id));
       setAllSubmissions(subs);
-    });
-  }, [user, loadAllSubmissions]);
-
-  // poll every 10s for new submissions
-  useEffect(() => {
-    if (!user) return;
-    const iv = setInterval(() => {
-      loadAllSubmissions(user.gmail).then(subs => {
-        const fresh = subs.filter(s => !seenIds.current.has(s.id));
-        fresh.forEach(sub => {
-          seenIds.current.add(sub.id);
-          const student = studentsRef.current.find(s => s.gmail === sub.studentGmail);
-          const assignment = assignmentsRef.current.find(a => a.id === sub.assignmentId);
-          const nid = sub.id;
-          setNotifications(prev => [...prev, { nid, student, assignment }]);
-          setTimeout(() => setNotifications(prev => prev.filter(n => n.nid !== nid)), 5500);
+      iv = setInterval(() => {
+        loadAllSubmissions(user.gmail).then(subs2 => {
+          if (!mounted) return;
+          const fresh = subs2.filter(s => !seenIds.current.has(s.id));
+          fresh.forEach(sub => {
+            seenIds.current.add(sub.id);
+            const student = studentsRef.current.find(s => s.gmail === sub.studentGmail);
+            const assignment = assignmentsRef.current.find(a => a.id === sub.assignmentId);
+            const nid = sub.id;
+            setNotifications(prev => [...prev, { nid, student, assignment }]);
+            setTimeout(() => setNotifications(prev => prev.filter(n => n.nid !== nid)), 5500);
+          });
+          setAllSubmissions(subs2);
         });
-        setAllSubmissions(subs);
-      });
-    }, 10000);
-    return () => clearInterval(iv);
+      }, 10000);
+    });
+    return () => { mounted = false; clearInterval(iv); };
   }, [user, loadAllSubmissions]);
 
   function copyCode() {
@@ -295,11 +294,12 @@ export default function TeacherDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!user || !selectedChatStudent || activeNav !== "chat") return;
+    if (!user || !selectedChatStudent) return;
+    setChatMessages([]);
     loadChat(user.gmail, selectedChatStudent.gmail);
-    const iv = setInterval(() => loadChat(user.gmail, selectedChatStudent.gmail), 5000);
+    const iv = setInterval(() => loadChat(user.gmail, selectedChatStudent.gmail), 3000);
     return () => clearInterval(iv);
-  }, [user, selectedChatStudent, activeNav, loadChat]);
+  }, [user, selectedChatStudent, loadChat]);
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [chatMessages]);
 
@@ -562,7 +562,7 @@ export default function TeacherDashboard() {
                       {allSubmissions.slice(0,4).map(sub => {
                         const st = students.find(s => s.gmail === sub.studentGmail);
                         const asgn = assignments.find(a => a.id === sub.assignmentId);
-                        const isImg = sub.filePath && /\.(jpg|jpeg|png|gif|webp)$/i.test(sub.filePath);
+                        const isImg = sub.filePath && /\.(jpg|jpeg|png|gif|webp)/i.test(sub.filePath);
                         return (
                           <div key={sub.id} className="flex items-center gap-3 py-3">
                             <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
@@ -760,7 +760,7 @@ export default function TeacherDashboard() {
                           const name = student ? displayName(student) : sub.studentGmail.split("@")[0];
                           const color = avatarColor(sub.studentGmail);
                           const init = student ? initials(student) : sub.studentGmail[0].toUpperCase();
-                          const isImg = sub.filePath && /\.(jpg|jpeg|png|gif|webp)$/i.test(sub.filePath);
+                          const isImg = sub.filePath && /\.(jpg|jpeg|png|gif|webp)/i.test(sub.filePath);
                           return (
                             <div key={sub.id} className="bg-white rounded-2xl p-5 shadow-sm">
                               <div className="flex items-center gap-3 mb-3">
