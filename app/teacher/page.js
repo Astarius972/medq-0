@@ -66,6 +66,43 @@ function NotifCard({ n, onClose }) {
   );
 }
 
+function ChatNotifCard({ n, onClose }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const show = requestAnimationFrame(() => setVisible(true));
+    const hide = setTimeout(() => { setVisible(false); setTimeout(onClose, 320); }, 4700);
+    return () => { cancelAnimationFrame(show); clearTimeout(hide); };
+  }, [onClose]);
+  const name = n.student ? displayName(n.student) : "Сурагч";
+  const color = n.student ? avatarColor(n.student.gmail) : "#06b6d4";
+  const init = n.student ? initials(n.student) : "?";
+  return (
+    <div style={{
+      transform: visible ? "translateX(0)" : "translateX(calc(100% + 20px))",
+      opacity: visible ? 1 : 0,
+      transition: "transform 0.32s cubic-bezier(.22,.68,0,1.2), opacity 0.32s ease",
+      background: "#1b2838",
+      borderRadius: 10,
+      padding: "12px 14px",
+      width: 300,
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+      borderLeft: "3px solid #06b6d4",
+    }}>
+      <div style={{ width:40, height:40, borderRadius:"50%", background:color, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontWeight:"bold", fontSize:14, flexShrink:0 }}>{init}</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <p style={{ color:"#acb2b8", fontSize:10, marginBottom:2, textTransform:"uppercase", letterSpacing:1 }}>Шинэ мессеж</p>
+        <p style={{ color:"white", fontWeight:700, fontSize:14, lineHeight:1.3 }}>{name}</p>
+        <p style={{ color:"#8f98a0", fontSize:12, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{n.text}</p>
+      </div>
+      <button onClick={e => { e.stopPropagation(); setVisible(false); setTimeout(onClose, 320); }}
+        style={{ color:"#8f98a0", background:"none", border:"none", cursor:"pointer", fontSize:16, lineHeight:1, padding:4 }}>✕</button>
+    </div>
+  );
+}
+
 export default function TeacherDashboard() {
   const [user, setUser] = useState(null);
   const [students, setStudents] = useState([]);
@@ -114,6 +151,9 @@ export default function TeacherDashboard() {
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const chatBottomRef = useRef(null);
+  const [chatNotifications, setChatNotifications] = useState([]);
+  const seenMsgIds = useRef(new Set());
+  const selectedChatStudentRef = useRef(null);
 
   // research
   const [researchTopic, setResearchTopic] = useState("");
@@ -151,10 +191,16 @@ export default function TeacherDashboard() {
     setLoadingSubs(true);
     fetch(`/api/submissions?assignmentId=${selectedAssignment.id}`)
       .then(r => r.json()).then(d => { setSubmissions(d.submissions || []); setLoadingSubs(false); });
+    const iv = setInterval(() =>
+      fetch(`/api/submissions?assignmentId=${selectedAssignment.id}`)
+        .then(r => r.json()).then(d => setSubmissions(d.submissions || []))
+    , 5000);
+    return () => clearInterval(iv);
   }, [selectedAssignment]);
 
   // keep refs current to avoid stale closures in polling interval
   useEffect(() => { studentsRef.current = students; }, [students]);
+  useEffect(() => { selectedChatStudentRef.current = selectedChatStudent; }, [selectedChatStudent]);
   useEffect(() => { assignmentsRef.current = assignments; }, [assignments]);
 
   const loadAllSubmissions = useCallback((gmail) =>
@@ -257,14 +303,31 @@ export default function TeacherDashboard() {
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [chatMessages]);
 
-  // grouped students for chat sidebar
+  // grouped students for chat sidebar + background chat notifications
   const [allChatMessages, setAllChatMessages] = useState([]);
   useEffect(() => {
-    if (!user || activeNav !== "chat") return;
-    const load = () => fetch(`/api/chat?teacherGmail=${encodeURIComponent(user.gmail)}`)
-      .then(r => r.json()).then(d => setAllChatMessages(d.messages || []));
-    load();
-    const iv = setInterval(load, 5000);
+    if (!user) return;
+    const load = (isFirst) => fetch(`/api/chat?teacherGmail=${encodeURIComponent(user.gmail)}`)
+      .then(r => r.json()).then(d => {
+        const msgs = d.messages || [];
+        if (isFirst) {
+          msgs.forEach(m => seenMsgIds.current.add(m.id));
+        } else {
+          const fresh = msgs.filter(m => !seenMsgIds.current.has(m.id) && m.fromGmail !== user.gmail);
+          fresh.forEach(m => {
+            seenMsgIds.current.add(m.id);
+            const student = studentsRef.current.find(s => s.gmail === m.fromGmail);
+            const nid = m.id;
+            // don't notify if already viewing that student's chat
+            if (selectedChatStudentRef.current?.gmail === m.fromGmail && activeNav === "chat") return;
+            setChatNotifications(prev => [...prev, { nid, student, text: m.text }]);
+            setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
+          });
+        }
+        setAllChatMessages(msgs);
+      });
+    load(true);
+    const iv = setInterval(() => load(false), 5000);
     return () => clearInterval(iv);
   }, [user, activeNav]);
 
@@ -1125,6 +1188,9 @@ export default function TeacherDashboard() {
       <div className="fixed bottom-4 right-4 z-[200] flex flex-col gap-2 items-end">
         {notifications.map(n => (
           <NotifCard key={n.nid} n={n} onClose={() => setNotifications(prev => prev.filter(x => x.nid !== n.nid))} />
+        ))}
+        {chatNotifications.map(n => (
+          <ChatNotifCard key={n.nid} n={n} onClose={() => setChatNotifications(prev => prev.filter(x => x.nid !== n.nid))} />
         ))}
       </div>
     </div>

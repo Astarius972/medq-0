@@ -3,6 +3,35 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { isPast, fmtDate, timeLeft, relTime } from "@/lib/formatters";
 
+function StudentChatToast({ n, onClose }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const show = requestAnimationFrame(() => setVisible(true));
+    const hide = setTimeout(() => { setVisible(false); setTimeout(onClose, 320); }, 4700);
+    return () => { cancelAnimationFrame(show); clearTimeout(hide); };
+  }, [onClose]);
+  return (
+    <div style={{
+      transform: visible ? "translateX(0)" : "translateX(calc(100% + 20px))",
+      opacity: visible ? 1 : 0,
+      transition: "transform 0.32s cubic-bezier(.22,.68,0,1.2), opacity 0.32s ease",
+      background: "#1b2838", borderRadius: 10, padding: "12px 14px", width: 280,
+      display: "flex", alignItems: "center", gap: 12,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.5)", borderLeft: "3px solid #06b6d4",
+    }}>
+      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#06b6d4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ color: "#acb2b8", fontSize: 10, marginBottom: 2, textTransform: "uppercase", letterSpacing: 1 }}>Багшаас мессеж</p>
+        <p style={{ color: "white", fontSize: 13, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.text}</p>
+      </div>
+      <button onClick={e => { e.stopPropagation(); setVisible(false); setTimeout(onClose, 320); }}
+        style={{ color: "#8f98a0", background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: 4 }}>✕</button>
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -30,6 +59,9 @@ export default function StudentDashboard() {
   const [aiInput, setAiInput] = useState("");
   const [aiSending, setAiSending] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState("");
+  const [chatNotifications, setChatNotifications] = useState([]);
+  const seenMsgIds = useRef(new Set());
+  const userRef = useRef(null);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("user");
@@ -55,6 +87,8 @@ export default function StudentDashboard() {
     });
   }, [user]);
 
+  useEffect(() => { userRef.current = user; }, [user]);
+
   const loadChat = useCallback((studentGmail, teacherGmail) => {
     if (!teacherGmail) return;
     fetch(`/api/chat?studentGmail=${encodeURIComponent(studentGmail)}&teacherGmail=${encodeURIComponent(teacherGmail)}`)
@@ -67,11 +101,30 @@ export default function StudentDashboard() {
     loadChat(user.gmail, selectedTeacherGmail);
   }, [user, selectedTeacherGmail, loadChat]);
 
+  // background chat polling — runs always, fires toast on new teacher messages
   useEffect(() => {
-    if (!user || !selectedTeacherGmail || activeTab !== "chat") return;
-    const iv = setInterval(() => loadChat(user.gmail, selectedTeacherGmail), 5000);
+    if (!user || !selectedTeacherGmail) return;
+    const poll = (isFirst) =>
+      fetch(`/api/chat?studentGmail=${encodeURIComponent(user.gmail)}&teacherGmail=${encodeURIComponent(selectedTeacherGmail)}`)
+        .then(r => r.json()).then(d => {
+          const msgs = d.messages || [];
+          if (isFirst) {
+            msgs.forEach(m => seenMsgIds.current.add(m.id));
+          } else {
+            const fresh = msgs.filter(m => !seenMsgIds.current.has(m.id) && m.fromGmail !== user.gmail);
+            fresh.forEach(m => {
+              seenMsgIds.current.add(m.id);
+              const nid = m.id;
+              setChatNotifications(prev => [...prev, { nid, text: m.text }]);
+              setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
+            });
+            if (fresh.length) setChatMessages(msgs);
+          }
+        });
+    poll(true);
+    const iv = setInterval(() => poll(false), 5000);
     return () => clearInterval(iv);
-  }, [user, selectedTeacherGmail, activeTab, loadChat]);
+  }, [user, selectedTeacherGmail]);
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
@@ -773,6 +826,13 @@ export default function StudentDashboard() {
       )}
 
       {/* ===== IMAGE LIGHTBOX ===== */}
+      {/* ===== CHAT NOTIFICATIONS ===== */}
+      <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 200, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+        {chatNotifications.map(n => (
+          <StudentChatToast key={n.nid} n={n} onClose={() => setChatNotifications(prev => prev.filter(x => x.nid !== n.nid))} />
+        ))}
+      </div>
+
       {lightboxUrl && (
         <div onClick={() => setLightboxUrl("")}
           style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, cursor: "zoom-out" }}>
