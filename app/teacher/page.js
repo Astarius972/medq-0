@@ -23,6 +23,7 @@ const NAV = [
   { key:"assignments", label:"Даалгаврууд", badge:null, icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg> },
   { key:"students", label:"Сурагчид", badge:null, icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg> },
   { key:"chat", label:"Чат", badge:null, icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg> },
+  { key:"research", label:"AI Судалгаа", badge:null, icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg> },
 ];
 
 const EMPTY_FORM = { title:"", description:"", grade:"", deadline:"", points:100 };
@@ -111,6 +112,13 @@ export default function TeacherDashboard() {
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const chatBottomRef = useRef(null);
+
+  // research
+  const [researchTopic, setResearchTopic] = useState("");
+  const [researchResult, setResearchResult] = useState(null);
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchError, setResearchError] = useState("");
+  const [savedTopics, setSavedTopics] = useState([]);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("user");
@@ -836,6 +844,138 @@ export default function TeacherDashboard() {
                     </form>
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ── RESEARCH ── */}
+          {activeNav === "research" && (
+            <div style={{ height:"100%", overflowY:"auto", padding:"28px 32px" }}>
+              <div style={{ maxWidth:820, margin:"0 auto" }}>
+
+                {/* Header */}
+                <div style={{ marginBottom:24 }}>
+                  <h2 style={{ margin:0, fontSize:22, fontWeight:800, color:"#111827" }}>AI Хичээлийн судалгаа</h2>
+                  <p style={{ margin:"4px 0 0", fontSize:13, color:"#9ca3af" }}>Сэдэв оруулахад AI интернетээс мэдээлэл цуглуулж, хялбаршуулан тайлбарлана</p>
+                </div>
+
+                {/* Input */}
+                <div style={{ background:"white", borderRadius:20, padding:24, boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:20 }}>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!researchTopic.trim()) return;
+                    setResearchError(""); setResearchLoading(true); setResearchResult(null);
+                    try {
+                      const res = await fetch("/api/research", {
+                        method:"POST", headers:{"Content-Type":"application/json"},
+                        body: JSON.stringify({ topic: researchTopic }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      setResearchResult(data);
+                      setSavedTopics(prev => [researchTopic, ...prev.filter(t => t !== researchTopic)].slice(0,8));
+                    } catch(err) { setResearchError(err.message); }
+                    finally { setResearchLoading(false); }
+                  }}>
+                    <label style={{ display:"block", fontSize:13, fontWeight:700, color:"#374151", marginBottom:8 }}>Судлах сэдэв</label>
+                    <div style={{ display:"flex", gap:10 }}>
+                      <input
+                        type="text"
+                        placeholder="Жишээ: Фотосинтез, Монголын түүх, Квадрат тэгшитгэл, Newton-ы хуулиуд..."
+                        value={researchTopic}
+                        onChange={e => setResearchTopic(e.target.value)}
+                        disabled={researchLoading}
+                        style={{ flex:1, padding:"12px 16px", borderRadius:12, border:"1px solid #e5e7eb", fontSize:14, outline:"none", color:"#111827", background:"#f9fafb" }}
+                      />
+                      <button type="submit" disabled={researchLoading || !researchTopic.trim()}
+                        style={{ padding:"12px 24px", borderRadius:12, fontWeight:700, fontSize:14, color:"white", background:"#f97316", border:"none", cursor:"pointer", opacity:(researchLoading||!researchTopic.trim())?0.6:1, whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:8 }}>
+                        {researchLoading ? (
+                          <><span style={{ width:14, height:14, border:"2px solid rgba(255,255,255,0.4)", borderTopColor:"white", borderRadius:"50%", display:"inline-block", animation:"spin 0.7s linear infinite" }}/> Судалж байна...</>
+                        ) : (
+                          <><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg> Судлах</>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Quick topics */}
+                  <div style={{ marginTop:14, display:"flex", flexWrap:"wrap", gap:8 }}>
+                    {["Фотосинтез","Квадрат тэгшитгэл","Ньютоны хуулиуд","Монголын эзэнт гүрэн","Хүчилтөрөгч","Пифагорын теорем","Дэлхийн дулааралт","Хэлний хэсгүүд"].map(t => (
+                      <button key={t} onClick={() => setResearchTopic(t)}
+                        style={{ padding:"5px 12px", borderRadius:99, border:"1px solid #fed7aa", background:"#fff7ed", color:"#c2410c", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Error */}
+                {researchError && (
+                  <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:12, padding:"12px 16px", marginBottom:16, color:"#dc2626", fontSize:13 }}>
+                    {researchError}
+                  </div>
+                )}
+
+                {/* Loading skeleton */}
+                {researchLoading && (
+                  <div style={{ background:"white", borderRadius:20, padding:32, boxShadow:"0 1px 6px rgba(0,0,0,0.07)", textAlign:"center" }}>
+                    <div style={{ width:48, height:48, border:"3px solid #fed7aa", borderTopColor:"#f97316", borderRadius:"50%", animation:"spin 0.8s linear infinite", margin:"0 auto 16px" }}/>
+                    <p style={{ margin:0, fontWeight:700, color:"#374151", fontSize:15 }}>AI судалж байна...</p>
+                    <p style={{ margin:"6px 0 0", color:"#9ca3af", fontSize:13 }}>"{researchTopic}" сэдвийн талаарх мэдээллийг боловсруулж байна</p>
+                  </div>
+                )}
+
+                {/* Result */}
+                {researchResult && !researchLoading && (
+                  <div style={{ background:"white", borderRadius:20, padding:28, boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, paddingBottom:16, borderBottom:"1px solid #f1f5f9" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{ width:36, height:36, borderRadius:10, background:"#fff7ed", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="#f97316"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>
+                        </div>
+                        <div>
+                          <p style={{ margin:0, fontWeight:800, fontSize:16, color:"#111827" }}>{researchResult.topic}</p>
+                          <p style={{ margin:0, fontSize:12, color:"#9ca3af" }}>AI-ийн боловсруулсан материал</p>
+                        </div>
+                      </div>
+                      <button onClick={() => {
+                        const text = researchResult.content;
+                        navigator.clipboard.writeText(text).catch(() => {});
+                      }}
+                        style={{ padding:"6px 14px", borderRadius:8, border:"1px solid #e5e7eb", background:"white", cursor:"pointer", fontSize:12, fontWeight:600, color:"#6b7280", display:"flex", alignItems:"center", gap:6 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        Хуулах
+                      </button>
+                    </div>
+                    <div style={{ fontSize:14, lineHeight:1.8, color:"#374151", whiteSpace:"pre-wrap" }}>
+                      {researchResult.content.split("\n").map((line, i) => {
+                        if (line.startsWith("## ")) return <h3 key={i} style={{ margin:"20px 0 8px", fontSize:16, fontWeight:800, color:"#111827", borderLeft:"3px solid #f97316", paddingLeft:12 }}>{line.replace("## ","")}</h3>;
+                        if (line.startsWith("# ")) return <h2 key={i} style={{ margin:"0 0 12px", fontSize:18, fontWeight:800, color:"#111827" }}>{line.replace("# ","")}</h2>;
+                        if (line.startsWith("**") && line.endsWith("**")) return <p key={i} style={{ margin:"4px 0", fontWeight:700, color:"#111827" }}>{line.replace(/\*\*/g,"")}</p>;
+                        if (line.match(/^\d+\./)) return <p key={i} style={{ margin:"4px 0 4px 12px", color:"#374151" }}>{line}</p>;
+                        if (line.startsWith("- ") || line.startsWith("• ")) return <p key={i} style={{ margin:"3px 0 3px 16px", color:"#374151" }}>{"• " + line.replace(/^[-•]\s*/,"")}</p>;
+                        if (line.trim() === "") return <div key={i} style={{ height:8 }}/>;
+                        return <p key={i} style={{ margin:"3px 0", color:"#374151" }}>{line}</p>;
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Saved topics history */}
+                {savedTopics.length > 0 && (
+                  <div style={{ marginTop:20, background:"white", borderRadius:16, padding:"16px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+                    <p style={{ margin:"0 0 10px", fontSize:12, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:1 }}>Сүүлийн хайлтууд</p>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                      {savedTopics.map(t => (
+                        <button key={t} onClick={() => setResearchTopic(t)}
+                          style={{ padding:"5px 12px", borderRadius:99, border:"1px solid #e5e7eb", background:"#f9fafb", color:"#374151", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               </div>
             </div>
           )}
