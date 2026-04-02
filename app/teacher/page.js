@@ -178,8 +178,8 @@ export default function TeacherDashboard() {
   }, []);
 
   useEffect(() => {
-    if (user && activeNav === "assignments") loadAssignments(user.gmail);
-  }, [user, activeNav, loadAssignments]);
+    if (user) loadAssignments(user.gmail);
+  }, [user, loadAssignments]);
 
   useEffect(() => {
     if (!selectedAssignment) return;
@@ -528,8 +528,8 @@ export default function TeacherDashboard() {
                 {[
                   { label:"Нийт сурагч", value:students.length, sub:`+${students.length} энэ сард`, bg:"#fff7ed", fill:"#f97316", icon:<path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/> },
                   { label:"Идэвхтэй даалгавар", value:assignments.filter(a=>!isPast(a.deadline)).length, sub:"Нийт даалгавар", bg:"#eff6ff", fill:"#3b82f6", icon:<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/> },
-                  { label:"Үнэлсэн даалгавар", value:0, sub:"Энэ сард", bg:"#f0fdf4", fill:"#10b981", icon:<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/> },
-                  { label:"Дундаж амжилт", value:"—", sub:"Өгөгдөл алга", bg:"#fafafa", fill:"#6b7280", icon:<path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6h-6z"/> },
+                  { label:"Үнэлсэн даалгавар", value:allSubmissions.filter(s=>s.score!==null).length, sub:"Нийт үнэлсэн", bg:"#f0fdf4", fill:"#10b981", icon:<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/> },
+                  { label:"Дундаж амжилт", value:(()=>{ const gs=allSubmissions.filter(s=>s.score!==null); return gs.length ? Math.round(gs.reduce((a,s)=>a+s.score,0)/gs.length)+"%" : "—"; })(), sub: allSubmissions.filter(s=>s.score!==null).length ? `${allSubmissions.filter(s=>s.score!==null).length} дүгнэлт` : "Өгөгдөл алга", bg:"#fafafa", fill:"#6b7280", icon:<path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6h-6z"/> },
                 ].map(s => (
                   <div key={s.label} className="bg-white rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div>
@@ -1033,6 +1033,28 @@ export default function TeacherDashboard() {
                   onChange={e => setForm(f=>({...f, description:e.target.value}))}
                   className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none" style={{ background:"#f3f4f6" }}/>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Зураг (заавал биш)</label>
+                {imagePreview ? (
+                  <div className="relative">
+                    <img src={imagePreview} alt="preview" className="w-full rounded-xl object-contain max-h-40 border border-gray-100"/>
+                    <button type="button" onClick={() => { setImageFile(null); setImagePreview(""); }}
+                      className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                      style={{ background:"rgba(0,0,0,0.55)" }}>✕</button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center gap-2 px-4 py-5 rounded-xl cursor-pointer border-2 border-dashed border-gray-200 hover:border-orange-300 transition-colors"
+                    style={{ background:"#f9fafb" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#d1d5db"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                    <span className="text-sm text-gray-400">Зураг сонгох</span>
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); }
+                      }}/>
+                  </label>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1.5">Хугацаа</label>
@@ -1066,11 +1088,37 @@ export default function TeacherDashboard() {
 
       {gradeTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background:"rgba(0,0,0,0.4)" }}>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Үнэлгээ өгөх</h3>
-            <p className="text-sm text-gray-400 mb-6">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 overflow-y-auto" style={{ maxHeight:"90vh" }}>
+            <h3 className="text-xl font-bold text-gray-900 mb-1">Үнэлгээ өгөх</h3>
+            <p className="text-sm text-gray-400 mb-4">
               {students.find(s=>s.gmail===gradeTarget.studentGmail) ? displayName(students.find(s=>s.gmail===gradeTarget.studentGmail)) : gradeTarget.studentGmail}
             </p>
+            {(gradeTarget.text || gradeTarget.filePath) && (
+              <div className="mb-5 rounded-2xl p-4" style={{ background:"#f9fafb", border:"1px solid #f3f4f6" }}>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Сурагчийн илгээсэн</p>
+                {gradeTarget.text && (
+                  <p className="text-sm text-gray-700 mb-3 leading-relaxed">{gradeTarget.text}</p>
+                )}
+                {gradeTarget.filePath && (() => {
+                  const isImg = /\.(jpg|jpeg|png|gif|webp)/i.test(gradeTarget.filePath);
+                  return isImg ? (
+                    <button type="button" onClick={() => setLightboxUrl(gradeTarget.filePath)}
+                      className="block w-full" style={{ border:"none", background:"none", padding:0, cursor:"zoom-in" }}>
+                      <img src={gradeTarget.filePath} alt="submission"
+                        className="w-full rounded-xl object-contain border border-gray-100 hover:opacity-90 transition-opacity"
+                        style={{ maxHeight:220 }}/>
+                    </button>
+                  ) : (
+                    <a href={gradeTarget.filePath} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-xl"
+                      style={{ background:"#eff6ff", color:"#3b82f6" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z"/></svg>
+                      {gradeTarget.filePath.split("/").pop()}
+                    </a>
+                  );
+                })()}
+              </div>
+            )}
             <form onSubmit={handleGrade} className="flex flex-col gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1.5">Хувь оноо (0–100)</label>

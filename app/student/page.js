@@ -94,22 +94,20 @@ export default function StudentDashboard() {
       fetch(`/api/chat?studentGmail=${encodeURIComponent(user.gmail)}&teacherGmail=${encodeURIComponent(selectedTeacherGmail)}`)
         .then(r => r.json()).then(d => {
           const msgs = d.messages || [];
-          if (isFirst) {
-            msgs.forEach(m => seenMsgIds.current.add(m.id));
-          } else {
-            const fresh = msgs.filter(m => !seenMsgIds.current.has(m.id) && m.fromGmail !== user.gmail);
-            fresh.forEach(m => {
-              seenMsgIds.current.add(m.id);
+          const fresh = msgs.filter(m => !seenMsgIds.current.has(m.id) && m.fromGmail !== user.gmail);
+          fresh.forEach(m => {
+            seenMsgIds.current.add(m.id);
+            if (!isFirst) {
               const nid = m.id;
               setChatNotifications(prev => [...prev, { nid, text: m.text }]);
               setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
               if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
                 new Notification("Анги платформ — Шинэ мессеж", { body: m.text, icon: "/favicon.ico" });
               }
-            });
-            if (fresh.length) setChatMessages(msgs);
-          }
-          if (isFirst) setChatMessages(msgs);
+            }
+          });
+          // Always sync the full message list so teacher's messages always appear
+          setChatMessages(msgs);
         });
     load(true);
     const iv = setInterval(() => load(false), 2000);
@@ -268,7 +266,7 @@ export default function StudentDashboard() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ color: "white", fontWeight: 700, fontSize: 12, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</p>
-            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 10, margin: 0 }}>Сурагч</p>
+            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 10, margin: 0 }}>{user.grade}-р анги • Сурагч</p>
           </div>
           <button onClick={logout} title="Гарах" style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.7)", padding: 4, display: "flex", alignItems: "center" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>

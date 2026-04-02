@@ -76,7 +76,7 @@ export default function Home() {
   }
 
   if (newPersonalCode) return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12"
+    <div className="flex-1 overflow-y-auto flex items-center justify-center px-6 py-12"
       style={{ background: "linear-gradient(135deg,#e0f7fa 0%,#f0fdfd 60%,#ffffff 100%)" }}>
       <div className="bg-white rounded-3xl shadow-xl p-12 text-center" style={{ maxWidth: 480, width: "100%" }}>
         <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6"
@@ -115,8 +115,9 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12"
+    <div className="flex-1 overflow-y-auto"
       style={{ background: "linear-gradient(135deg,#e0f7fa 0%,#f0fdfd 60%,#ffffff 100%)" }}>
+    <div className="min-h-full flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-6xl flex flex-col lg:flex-row items-center lg:items-stretch gap-12 lg:gap-20">
 
         {/* Left — Branding */}
@@ -339,6 +340,7 @@ export default function Home() {
         </div>
 
       </div>
+    </div>
     </div>
   );
 }

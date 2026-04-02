@@ -8,17 +8,21 @@ export async function GET(request) {
     const studentGmail = searchParams.get("studentGmail");
 
     if (teacherGmail && studentGmail) {
-      const { data } = await supabase.from("messages").select("*")
-        .or(`and(from_gmail.eq.${teacherGmail},to_gmail.eq.${studentGmail}),and(from_gmail.eq.${studentGmail},to_gmail.eq.${teacherGmail})`)
-        .order("sent_at", { ascending: true });
-      return Response.json({ messages: (data || []).map(toMsgJS) });
+      const [r1, r2] = await Promise.all([
+        supabase.from("messages").select("*").eq("from_gmail", teacherGmail).eq("to_gmail", studentGmail),
+        supabase.from("messages").select("*").eq("from_gmail", studentGmail).eq("to_gmail", teacherGmail),
+      ]);
+      const data = [...(r1.data || []), ...(r2.data || [])].sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at));
+      return Response.json({ messages: data.map(toMsgJS) });
     }
 
     if (teacherGmail) {
-      const { data } = await supabase.from("messages").select("*")
-        .or(`from_gmail.eq.${teacherGmail},to_gmail.eq.${teacherGmail}`)
-        .order("sent_at", { ascending: true });
-      return Response.json({ messages: (data || []).map(toMsgJS) });
+      const [r1, r2] = await Promise.all([
+        supabase.from("messages").select("*").eq("from_gmail", teacherGmail),
+        supabase.from("messages").select("*").eq("to_gmail", teacherGmail),
+      ]);
+      const data = [...(r1.data || []), ...(r2.data || [])].sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at));
+      return Response.json({ messages: data.map(toMsgJS) });
     }
 
     return Response.json({ messages: [] });
