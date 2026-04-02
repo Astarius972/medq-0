@@ -207,31 +207,32 @@ export default function TeacherDashboard() {
     fetch(`/api/submissions?teacherGmail=${encodeURIComponent(gmail)}`).then(r => r.json()).then(d => d.submissions || [])
   , []);
 
-  // seed then poll every 10s — single effect so seeding always completes before first poll
+  // poll every 10s — only notify for submissions within the last 2 minutes (avoids reload spam)
   useEffect(() => {
     if (!user) return;
     let mounted = true;
-    let iv = null;
-    loadAllSubmissions(user.gmail).then(subs => {
-      if (!mounted) return;
-      subs.forEach(s => seenIds.current.add(s.id));
-      setAllSubmissions(subs);
-      iv = setInterval(() => {
-        loadAllSubmissions(user.gmail).then(subs2 => {
-          if (!mounted) return;
-          const fresh = subs2.filter(s => !seenIds.current.has(s.id));
-          fresh.forEach(sub => {
-            seenIds.current.add(sub.id);
-            const student = studentsRef.current.find(s => s.gmail === sub.studentGmail);
-            const assignment = assignmentsRef.current.find(a => a.id === sub.assignmentId);
-            const nid = sub.id;
-            setNotifications(prev => [...prev, { nid, student, assignment }]);
-            setTimeout(() => setNotifications(prev => prev.filter(n => n.nid !== nid)), 5500);
-          });
-          setAllSubmissions(subs2);
+    const TWO_MIN = 2 * 60 * 1000;
+    const poll = () => {
+      loadAllSubmissions(user.gmail).then(subs => {
+        if (!mounted) return;
+        const now = Date.now();
+        const fresh = subs.filter(s =>
+          !seenIds.current.has(s.id) &&
+          now - new Date(s.submittedAt).getTime() < TWO_MIN
+        );
+        subs.forEach(s => seenIds.current.add(s.id));
+        fresh.forEach(sub => {
+          const student = studentsRef.current.find(s => s.gmail === sub.studentGmail);
+          const assignment = assignmentsRef.current.find(a => a.id === sub.assignmentId);
+          const nid = sub.id;
+          setNotifications(prev => [...prev, { nid, student, assignment }]);
+          setTimeout(() => setNotifications(prev => prev.filter(n => n.nid !== nid)), 5500);
         });
-      }, 10000);
-    });
+        setAllSubmissions(subs);
+      });
+    };
+    poll();
+    const iv = setInterval(poll, 10000);
     return () => { mounted = false; clearInterval(iv); };
   }, [user, loadAllSubmissions]);
 
@@ -307,27 +308,28 @@ export default function TeacherDashboard() {
   const [allChatMessages, setAllChatMessages] = useState([]);
   useEffect(() => {
     if (!user) return;
-    const load = (isFirst) => fetch(`/api/chat?teacherGmail=${encodeURIComponent(user.gmail)}`)
+    const TWO_MIN = 2 * 60 * 1000;
+    const poll = () => fetch(`/api/chat?teacherGmail=${encodeURIComponent(user.gmail)}`)
       .then(r => r.json()).then(d => {
         const msgs = d.messages || [];
-        if (isFirst) {
-          msgs.forEach(m => seenMsgIds.current.add(m.id));
-        } else {
-          const fresh = msgs.filter(m => !seenMsgIds.current.has(m.id) && m.fromGmail !== user.gmail);
-          fresh.forEach(m => {
-            seenMsgIds.current.add(m.id);
-            const student = studentsRef.current.find(s => s.gmail === m.fromGmail);
-            const nid = m.id;
-            // don't notify if already viewing that student's chat
-            if (selectedChatStudentRef.current?.gmail === m.fromGmail && activeNav === "chat") return;
-            setChatNotifications(prev => [...prev, { nid, student, text: m.text }]);
-            setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
-          });
-        }
+        const now = Date.now();
+        const fresh = msgs.filter(m =>
+          !seenMsgIds.current.has(m.id) &&
+          m.fromGmail !== user.gmail &&
+          now - new Date(m.sentAt).getTime() < TWO_MIN
+        );
+        msgs.forEach(m => seenMsgIds.current.add(m.id));
+        fresh.forEach(m => {
+          if (selectedChatStudentRef.current?.gmail === m.fromGmail && activeNav === "chat") return;
+          const student = studentsRef.current.find(s => s.gmail === m.fromGmail);
+          const nid = m.id;
+          setChatNotifications(prev => [...prev, { nid, student, text: m.text }]);
+          setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
+        });
         setAllChatMessages(msgs);
       });
-    load(true);
-    const iv = setInterval(() => load(false), 5000);
+    poll();
+    const iv = setInterval(poll, 5000);
     return () => clearInterval(iv);
   }, [user, activeNav]);
 
