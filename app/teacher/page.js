@@ -110,7 +110,6 @@ export default function TeacherDashboard() {
   const [copied, setCopied] = useState(false);
   const router = useRouter();
 
-  // inline login state
   const [loginGmail, setLoginGmail] = useState("");
   const [loginPw, setLoginPw] = useState("");
   const [loginPw2, setLoginPw2] = useState("");
@@ -118,7 +117,6 @@ export default function TeacherDashboard() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
 
-  // assignments state
   const [assignments, setAssignments] = useState([]);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [submissions, setSubmissions] = useState([]);
@@ -130,22 +128,18 @@ export default function TeacherDashboard() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
 
-  // grade modal
   const [gradeTarget, setGradeTarget] = useState(null);
   const [gradeInput, setGradeInput] = useState("");
   const [grading, setGrading] = useState(false);
 
-  // all submissions (for dashboard + polling)
   const [allSubmissions, setAllSubmissions] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const seenIds = useRef(new Set());
   const studentsRef = useRef([]);
   const assignmentsRef = useRef([]);
 
-  // search in assignments submissions list
   const [subSearch, setSubSearch] = useState("");
 
-  // chat
   const [chatMessages, setChatMessages] = useState([]);
   const [selectedChatStudent, setSelectedChatStudent] = useState(null);
   const [chatInput, setChatInput] = useState("");
@@ -155,10 +149,8 @@ export default function TeacherDashboard() {
   const seenMsgIds = useRef(new Set());
   const selectedChatStudentRef = useRef(null);
 
-  // image lightbox (submission viewer)
   const [lightboxUrl, setLightboxUrl] = useState(null);
 
-  // research
   const [researchTopic, setResearchTopic] = useState("");
   const [researchResult, setResearchResult] = useState(null);
   const [researchLoading, setResearchLoading] = useState(false);
@@ -201,7 +193,6 @@ export default function TeacherDashboard() {
     return () => clearInterval(iv);
   }, [selectedAssignment]);
 
-  // keep refs current to avoid stale closures in polling interval
   useEffect(() => { studentsRef.current = students; }, [students]);
   useEffect(() => { selectedChatStudentRef.current = selectedChatStudent; }, [selectedChatStudent]);
   useEffect(() => { assignmentsRef.current = assignments; }, [assignments]);
@@ -210,7 +201,6 @@ export default function TeacherDashboard() {
     fetch(`/api/submissions?teacherGmail=${encodeURIComponent(gmail)}`).then(r => r.json()).then(d => d.submissions || [])
   , []);
 
-  // poll every 10s — only notify for submissions within the last 2 minutes (avoids reload spam)
   useEffect(() => {
     if (!user) return;
     let mounted = true;
@@ -291,7 +281,6 @@ export default function TeacherDashboard() {
     finally { setGrading(false); }
   }
 
-  // chat
   const loadChat = useCallback((teacherGmail, studentGmail) => {
     fetch(`/api/chat?teacherGmail=${encodeURIComponent(teacherGmail)}&studentGmail=${encodeURIComponent(studentGmail)}`)
       .then(r => r.json()).then(d => setChatMessages(d.messages || []));
@@ -307,34 +296,12 @@ export default function TeacherDashboard() {
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [chatMessages]);
 
-  // grouped students for chat sidebar + background chat notifications
   const [allChatMessages, setAllChatMessages] = useState([]);
   useEffect(() => {
     if (!user) return;
-    const TWO_MIN = 2 * 60 * 1000;
-    const poll = () => fetch(`/api/chat?teacherGmail=${encodeURIComponent(user.gmail)}`)
+    const load = (isFirst) => fetch(`/api/chat?teacherGmail=${encodeURIComponent(user.gmail)}`)
       .then(r => r.json()).then(d => {
         const msgs = d.messages || [];
-<<<<<<< HEAD
-        const now = Date.now();
-        const fresh = msgs.filter(m =>
-          !seenMsgIds.current.has(m.id) &&
-          m.fromGmail !== user.gmail &&
-          now - new Date(m.sentAt).getTime() < TWO_MIN
-        );
-        msgs.forEach(m => seenMsgIds.current.add(m.id));
-        fresh.forEach(m => {
-          if (selectedChatStudentRef.current?.gmail === m.fromGmail && activeNav === "chat") return;
-          const student = studentsRef.current.find(s => s.gmail === m.fromGmail);
-          const nid = m.id;
-          setChatNotifications(prev => [...prev, { nid, student, text: m.text }]);
-          setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
-        });
-        setAllChatMessages(msgs);
-      });
-    poll();
-    const iv = setInterval(poll, 5000);
-=======
         if (isFirst) {
           msgs.forEach(m => seenMsgIds.current.add(m.id));
         } else {
@@ -346,7 +313,6 @@ export default function TeacherDashboard() {
             if (selectedChatStudentRef.current?.gmail === m.fromGmail && activeNav === "chat") return;
             setChatNotifications(prev => [...prev, { nid, student, text: m.text }]);
             setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
-            // Browser notification
             if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
               new Notification("Анги платформ — Шинэ мессеж", {
                 body: `${student?.firstName || m.fromGmail}: ${m.text}`,
@@ -359,11 +325,9 @@ export default function TeacherDashboard() {
       });
     load(true);
     const iv = setInterval(() => load(false), 2000);
->>>>>>> 3861294500025a43c819e9e269e773d27be7c8e6
     return () => clearInterval(iv);
   }, [user, activeNav]);
 
-  // Request browser notification permission
   useEffect(() => {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
@@ -387,7 +351,6 @@ export default function TeacherDashboard() {
     } finally { setChatSending(false); }
   }
 
-  // top 4 students by average score
   const topStudents = useMemo(() => {
     return students
       .map(st => {
@@ -399,7 +362,6 @@ export default function TeacherDashboard() {
       .slice(0, 4);
   }, [students, allSubmissions]);
 
-  // students who have messaged the teacher
   const chatStudents = useMemo(() => {
     const seen = new Set();
     return students.filter(st => {
@@ -409,7 +371,6 @@ export default function TeacherDashboard() {
     });
   }, [students, allChatMessages]);
 
-  // chat badge: students with unread (last message from student, no reply after)
   const chatBadge = useMemo(() => {
     const count = students.filter(st => {
       const convo = allChatMessages
@@ -499,7 +460,6 @@ export default function TeacherDashboard() {
 
   return (
     <div className="flex" style={{ background:"#f8f9fa", height:"100vh", overflow:"hidden", color:"#111827" }}>
-      {/* Sidebar */}
       <aside className="w-56 flex flex-col shrink-0" style={{ background:"#f97316" }}>
         <div className="flex items-center gap-3 px-5 py-5">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-lg shrink-0" style={{ background:"rgba(255,255,255,0.25)", color:"white" }}>
@@ -547,9 +507,7 @@ export default function TeacherDashboard() {
         </div>
       </aside>
 
-      {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
         <header className="bg-white px-8 py-4 flex items-center justify-between shrink-0 border-b border-gray-100">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Сайн байна уу, {teacherDisplay}!</h1>
@@ -564,7 +522,6 @@ export default function TeacherDashboard() {
 
         <div className="flex-1 overflow-y-auto">
 
-          {/* ===== DASHBOARD ===== */}
           {activeNav === "dashboard" && (
             <div className="px-8 py-6">
               <div className="grid grid-cols-4 gap-5 mb-6">
@@ -690,10 +647,8 @@ export default function TeacherDashboard() {
             </div>
           )}
 
-          {/* ===== ASSIGNMENTS ===== */}
           {activeNav === "assignments" && (
             <div className="flex h-full" style={{ minHeight:"calc(100vh - 73px)" }}>
-              {/* Left: assignment list */}
               <div className="w-96 border-r border-gray-100 bg-white flex flex-col">
                 <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
                   <div>
@@ -744,7 +699,6 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
-              {/* Right: submissions */}
               <div className="flex-1 overflow-y-auto px-8 py-6">
                 {!selectedAssignment ? (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
@@ -858,7 +812,6 @@ export default function TeacherDashboard() {
             </div>
           )}
 
-          {/* ===== STUDENTS ===== */}
           {activeNav === "students" && (
             <div className="px-8 py-6">
               <h2 className="text-xl font-bold text-gray-900 mb-5">Сурагчид ({students.length})</h2>
@@ -887,10 +840,8 @@ export default function TeacherDashboard() {
             </div>
           )}
 
-          {/* ===== CHAT ===== */}
           {activeNav === "chat" && (
             <div className="flex h-full" style={{ minHeight:"calc(100vh - 73px)" }}>
-              {/* Student list */}
               <div className="w-72 border-r border-gray-100 bg-white flex flex-col shrink-0">
                 <div className="px-5 py-4 border-b border-gray-100">
                   <h2 className="font-bold text-gray-900">Чат</h2>
@@ -924,7 +875,6 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
-              {/* Conversation */}
               <div className="flex-1 flex flex-col bg-white">
                 {!selectedChatStudent ? (
                   <div className="flex-1 flex items-center justify-center"><p className="text-gray-300">Сурагч сонгоно уу</p></div>
@@ -972,18 +922,13 @@ export default function TeacherDashboard() {
             </div>
           )}
 
-          {/* ── RESEARCH ── */}
           {activeNav === "research" && (
             <div style={{ height:"100%", overflowY:"auto", padding:"28px 32px" }}>
               <div style={{ maxWidth:820, margin:"0 auto" }}>
-
-                {/* Header */}
                 <div style={{ marginBottom:24 }}>
                   <h2 style={{ margin:0, fontSize:22, fontWeight:800, color:"#111827" }}>AI Хичээлийн судалгаа</h2>
                   <p style={{ margin:"4px 0 0", fontSize:13, color:"#9ca3af" }}>Сэдэв оруулахад AI интернетээс мэдээлэл цуглуулж, хялбаршуулан тайлбарлана</p>
                 </div>
-
-                {/* Input */}
                 <div style={{ background:"white", borderRadius:20, padding:24, boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:20 }}>
                   <form onSubmit={async (e) => {
                     e.preventDefault();
@@ -1003,28 +948,17 @@ export default function TeacherDashboard() {
                   }}>
                     <label style={{ display:"block", fontSize:13, fontWeight:700, color:"#374151", marginBottom:8 }}>Судлах сэдэв</label>
                     <div style={{ display:"flex", gap:10 }}>
-                      <input
-                        type="text"
-                        placeholder="Жишээ: Фотосинтез, Монголын түүх, Квадрат тэгшитгэл, Newton-ы хуулиуд..."
-                        value={researchTopic}
-                        onChange={e => setResearchTopic(e.target.value)}
-                        disabled={researchLoading}
-                        style={{ flex:1, padding:"12px 16px", borderRadius:12, border:"1px solid #e5e7eb", fontSize:14, outline:"none", color:"#111827", background:"#f9fafb" }}
-                      />
+                      <input type="text" placeholder="Жишээ: Фотосинтез, Монголын түүх, Квадрат тэгшитгэл..." value={researchTopic}
+                        onChange={e => setResearchTopic(e.target.value)} disabled={researchLoading}
+                        style={{ flex:1, padding:"12px 16px", borderRadius:12, border:"1px solid #e5e7eb", fontSize:14, outline:"none", color:"#111827", background:"#f9fafb" }}/>
                       <button type="submit" disabled={researchLoading || !researchTopic.trim()}
-                        style={{ padding:"12px 24px", borderRadius:12, fontWeight:700, fontSize:14, color:"white", background:"#f97316", border:"none", cursor:"pointer", opacity:(researchLoading||!researchTopic.trim())?0.6:1, whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:8 }}>
-                        {researchLoading ? (
-                          <><span style={{ width:14, height:14, border:"2px solid rgba(255,255,255,0.4)", borderTopColor:"white", borderRadius:"50%", display:"inline-block", animation:"spin 0.7s linear infinite" }}/> Судалж байна...</>
-                        ) : (
-                          <><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg> Судлах</>
-                        )}
+                        style={{ padding:"12px 24px", borderRadius:12, fontWeight:700, fontSize:14, color:"white", background:"#f97316", border:"none", cursor:"pointer", opacity:(researchLoading||!researchTopic.trim())?0.6:1, whiteSpace:"nowrap" }}>
+                        {researchLoading ? "Судалж байна..." : "Судлах"}
                       </button>
                     </div>
                   </form>
-
-                  {/* Quick topics */}
                   <div style={{ marginTop:14, display:"flex", flexWrap:"wrap", gap:8 }}>
-                    {["Фотосинтез","Квадрат тэгшитгэл","Ньютоны хуулиуд","Монголын эзэнт гүрэн","Хүчилтөрөгч","Пифагорын теорем","Дэлхийн дулааралт","Хэлний хэсгүүд"].map(t => (
+                    {["Фотосинтез","Квадрат тэгшитгэл","Ньютоны хуулиуд","Монголын эзэнт гүрэн","Пифагорын теорем"].map(t => (
                       <button key={t} onClick={() => setResearchTopic(t)}
                         style={{ padding:"5px 12px", borderRadius:99, border:"1px solid #fed7aa", background:"#fff7ed", color:"#c2410c", fontSize:12, fontWeight:600, cursor:"pointer" }}>
                         {t}
@@ -1032,60 +966,19 @@ export default function TeacherDashboard() {
                     ))}
                   </div>
                 </div>
-
-                {/* Error */}
-                {researchError && (
-                  <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:12, padding:"12px 16px", marginBottom:16, color:"#dc2626", fontSize:13 }}>
-                    {researchError}
-                  </div>
-                )}
-
-                {/* Loading skeleton */}
-                {researchLoading && (
-                  <div style={{ background:"white", borderRadius:20, padding:32, boxShadow:"0 1px 6px rgba(0,0,0,0.07)", textAlign:"center" }}>
-                    <div style={{ width:48, height:48, border:"3px solid #fed7aa", borderTopColor:"#f97316", borderRadius:"50%", animation:"spin 0.8s linear infinite", margin:"0 auto 16px" }}/>
-                    <p style={{ margin:0, fontWeight:700, color:"#374151", fontSize:15 }}>AI судалж байна...</p>
-                    <p style={{ margin:"6px 0 0", color:"#9ca3af", fontSize:13 }}>"{researchTopic}" сэдвийн талаарх мэдээллийг боловсруулж байна</p>
-                  </div>
-                )}
-
-                {/* Result */}
+                {researchError && <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:12, padding:"12px 16px", marginBottom:16, color:"#dc2626", fontSize:13 }}>{researchError}</div>}
                 {researchResult && !researchLoading && (
                   <div style={{ background:"white", borderRadius:20, padding:28, boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, paddingBottom:16, borderBottom:"1px solid #f1f5f9" }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <div style={{ width:36, height:36, borderRadius:10, background:"#fff7ed", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="#f97316"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>
-                        </div>
-                        <div>
-                          <p style={{ margin:0, fontWeight:800, fontSize:16, color:"#111827" }}>{researchResult.topic}</p>
-                          <p style={{ margin:0, fontSize:12, color:"#9ca3af" }}>AI-ийн боловсруулсан материал</p>
-                        </div>
-                      </div>
-                      <button onClick={() => {
-                        const text = researchResult.content;
-                        navigator.clipboard.writeText(text).catch(() => {});
-                      }}
-                        style={{ padding:"6px 14px", borderRadius:8, border:"1px solid #e5e7eb", background:"white", cursor:"pointer", fontSize:12, fontWeight:600, color:"#6b7280", display:"flex", alignItems:"center", gap:6 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                        Хуулах
-                      </button>
-                    </div>
                     <div style={{ fontSize:14, lineHeight:1.8, color:"#374151", whiteSpace:"pre-wrap" }}>
                       {researchResult.content.split("\n").map((line, i) => {
                         if (line.startsWith("## ")) return <h3 key={i} style={{ margin:"20px 0 8px", fontSize:16, fontWeight:800, color:"#111827", borderLeft:"3px solid #f97316", paddingLeft:12 }}>{line.replace("## ","")}</h3>;
                         if (line.startsWith("# ")) return <h2 key={i} style={{ margin:"0 0 12px", fontSize:18, fontWeight:800, color:"#111827" }}>{line.replace("# ","")}</h2>;
-                        if (line.startsWith("**") && line.endsWith("**")) return <p key={i} style={{ margin:"4px 0", fontWeight:700, color:"#111827" }}>{line.replace(/\*\*/g,"")}</p>;
-                        if (line.match(/^\d+\./)) return <p key={i} style={{ margin:"4px 0 4px 12px", color:"#374151" }}>{line}</p>;
-                        if (line.startsWith("- ") || line.startsWith("• ")) return <p key={i} style={{ margin:"3px 0 3px 16px", color:"#374151" }}>{"• " + line.replace(/^[-•]\s*/,"")}</p>;
                         if (line.trim() === "") return <div key={i} style={{ height:8 }}/>;
                         return <p key={i} style={{ margin:"3px 0", color:"#374151" }}>{line}</p>;
                       })}
                     </div>
                   </div>
                 )}
-
-                {/* Saved topics history */}
                 {savedTopics.length > 0 && (
                   <div style={{ marginTop:20, background:"white", borderRadius:16, padding:"16px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
                     <p style={{ margin:"0 0 10px", fontSize:12, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:1 }}>Сүүлийн хайлтууд</p>
@@ -1099,7 +992,6 @@ export default function TeacherDashboard() {
                     </div>
                   </div>
                 )}
-
               </div>
             </div>
           )}
@@ -1107,7 +999,6 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {/* ===== CREATE ASSIGNMENT MODAL ===== */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background:"rgba(0,0,0,0.4)" }}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8">
@@ -1142,32 +1033,6 @@ export default function TeacherDashboard() {
                   onChange={e => setForm(f=>({...f, description:e.target.value}))}
                   className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none" style={{ background:"#f3f4f6" }}/>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1.5">Зураг (заавал биш)</label>
-                {imagePreview ? (
-                  <div className="relative">
-                    <img src={imagePreview} alt="preview" className="w-full rounded-xl object-cover" style={{ maxHeight:180 }}/>
-                    <button type="button" onClick={() => { setImageFile(null); setImagePreview(""); }}
-                      className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white"
-                      style={{ background:"rgba(0,0,0,0.5)" }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                    </button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center gap-2 w-full rounded-xl cursor-pointer"
-                    style={{ background:"#f3f4f6", border:"2px dashed #d1d5db", minHeight:80 }}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#9ca3af"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-                    <span className="text-xs text-gray-400">Зураг сонгох</span>
-                    <input type="file" accept="image/*" className="hidden"
-                      onChange={e => {
-                        const f = e.target.files?.[0];
-                        if (!f) return;
-                        setImageFile(f);
-                        setImagePreview(URL.createObjectURL(f));
-                      }}/>
-                  </label>
-                )}
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1.5">Хугацаа</label>
@@ -1199,7 +1064,6 @@ export default function TeacherDashboard() {
         </div>
       )}
 
-      {/* ===== GRADE MODAL ===== */}
       {gradeTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background:"rgba(0,0,0,0.4)" }}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8">
@@ -1234,39 +1098,21 @@ export default function TeacherDashboard() {
         </div>
       )}
 
-      {/* ===== IMAGE LIGHTBOX ===== */}
       {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-[300] flex items-center justify-center"
+        <div className="fixed inset-0 z-[300] flex items-center justify-center"
           style={{ background:"rgba(0,0,0,0.85)", backdropFilter:"blur(4px)" }}
-          onClick={() => setLightboxUrl(null)}
-        >
+          onClick={() => setLightboxUrl(null)}>
           <div className="relative max-w-4xl w-full mx-4" onClick={e => e.stopPropagation()}>
-            <img
-              src={lightboxUrl}
-              alt="Илгээлт"
-              style={{ width:"100%", maxHeight:"85vh", objectFit:"contain", borderRadius:16, boxShadow:"0 25px 60px rgba(0,0,0,0.5)" }}
-            />
-            <a
-              href={lightboxUrl}
-              target="_blank"
-              rel="noreferrer"
-              onClick={e => e.stopPropagation()}
-              style={{ position:"absolute", bottom:16, left:"50%", transform:"translateX(-50%)", background:"rgba(255,255,255,0.15)", color:"white", borderRadius:99, padding:"8px 20px", fontSize:13, fontWeight:600, textDecoration:"none", backdropFilter:"blur(8px)", border:"1px solid rgba(255,255,255,0.2)" }}
-            >
-              Бүтэн хэмжээгээр нээх ↗
-            </a>
-            <button
-              onClick={() => setLightboxUrl(null)}
-              style={{ position:"absolute", top:-16, right:-16, width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.2)", border:"none", cursor:"pointer", color:"white", fontSize:20, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(8px)" }}
-            >
+            <img src={lightboxUrl} alt="Илгээлт"
+              style={{ width:"100%", maxHeight:"85vh", objectFit:"contain", borderRadius:16, boxShadow:"0 25px 60px rgba(0,0,0,0.5)" }}/>
+            <button onClick={() => setLightboxUrl(null)}
+              style={{ position:"absolute", top:-16, right:-16, width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.2)", border:"none", cursor:"pointer", color:"white", fontSize:20, display:"flex", alignItems:"center", justifyContent:"center" }}>
               ✕
             </button>
           </div>
         </div>
       )}
 
-      {/* ===== STEAM-STYLE NOTIFICATIONS ===== */}
       <div className="fixed bottom-4 right-4 z-[200] flex flex-col gap-2 items-end">
         {notifications.map(n => (
           <NotifCard key={n.nid} n={n} onClose={() => setNotifications(prev => prev.filter(x => x.nid !== n.nid))} />

@@ -53,9 +53,8 @@ export default function StudentDashboard() {
   const [chatSending, setChatSending] = useState(false);
   const chatBottomRef = useRef(null);
 
-  // AI chat
   const [aiMode, setAiMode] = useState(false);
-  const [aiMessages, setAiMessages] = useState([]); // { role:"user"|"assistant", content }
+  const [aiMessages, setAiMessages] = useState([]);
   const [aiInput, setAiInput] = useState("");
   const [aiSending, setAiSending] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState("");
@@ -89,33 +88,12 @@ export default function StudentDashboard() {
 
   useEffect(() => { userRef.current = user; }, [user]);
 
-
-  // background chat polling — runs always, fires toast on new teacher messages (2 min window)
   useEffect(() => {
     if (!user || !selectedTeacherGmail) return;
-    const TWO_MIN = 2 * 60 * 1000;
-    const poll = () =>
+    const load = (isFirst) =>
       fetch(`/api/chat?studentGmail=${encodeURIComponent(user.gmail)}&teacherGmail=${encodeURIComponent(selectedTeacherGmail)}`)
         .then(r => r.json()).then(d => {
           const msgs = d.messages || [];
-<<<<<<< HEAD
-          const now = Date.now();
-          const fresh = msgs.filter(m =>
-            !seenMsgIds.current.has(m.id) &&
-            m.fromGmail !== user.gmail &&
-            now - new Date(m.sentAt).getTime() < TWO_MIN
-          );
-          msgs.forEach(m => seenMsgIds.current.add(m.id));
-          fresh.forEach(m => {
-            const nid = m.id;
-            setChatNotifications(prev => [...prev, { nid, text: m.text }]);
-            setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
-          });
-          setChatMessages(msgs);
-        });
-    poll();
-    const iv = setInterval(poll, 3000);
-=======
           if (isFirst) {
             msgs.forEach(m => seenMsgIds.current.add(m.id));
           } else {
@@ -125,21 +103,19 @@ export default function StudentDashboard() {
               const nid = m.id;
               setChatNotifications(prev => [...prev, { nid, text: m.text }]);
               setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
-              // Browser notification
               if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
                 new Notification("Анги платформ — Шинэ мессеж", { body: m.text, icon: "/favicon.ico" });
               }
             });
             if (fresh.length) setChatMessages(msgs);
           }
+          if (isFirst) setChatMessages(msgs);
         });
-    poll(true);
-    const iv = setInterval(() => poll(false), 2000);
->>>>>>> 3861294500025a43c819e9e269e773d27be7c8e6
+    load(true);
+    const iv = setInterval(() => load(false), 2000);
     return () => clearInterval(iv);
   }, [user, selectedTeacherGmail]);
 
-  // Browser notification permission
   useEffect(() => {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
@@ -256,9 +232,7 @@ export default function StudentDashboard() {
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc", color: "#111827" }}>
 
-      {/* SIDEBAR */}
       <div style={S.sidebar}>
-        {/* Header */}
         <div style={{ padding: "22px 14px 14px", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
             {initials}
@@ -269,7 +243,6 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* Nav */}
         <nav style={{ flex: 1, padding: "6px 10px", display: "flex", flexDirection: "column", gap: 3 }}>
           {NAV.map(item => {
             const active = activeTab === item.key;
@@ -289,7 +262,6 @@ export default function StudentDashboard() {
           })}
         </nav>
 
-        {/* Bottom user card */}
         <div style={{ margin: "0 10px 16px", padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
             {initials}
@@ -304,10 +276,8 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {/* MAIN */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-        {/* Top bar */}
         <div style={{ background: "white", padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
           <div>
             {activeTab === "dashboard" && <>
@@ -332,14 +302,10 @@ export default function StudentDashboard() {
           )}
         </div>
 
-        {/* Content */}
         <div style={{ flex: 1, overflow: "hidden" }}>
 
-          {/* ── DASHBOARD ── */}
           {activeTab === "dashboard" && (
             <div style={{ height: "100%", overflowY: "auto", padding: "24px 28px" }}>
-
-              {/* Stats row */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
                 {[
                   { label: "Элссэн хичээл", value: assignments.length, bg: "#e0f7fa",
@@ -361,13 +327,8 @@ export default function StudentDashboard() {
                 ))}
               </div>
 
-              {/* Two columns */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20 }}>
-
-                {/* Left column */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-                  {/* Upcoming assignments */}
                   <div style={S.card}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                       <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#111827" }}>Удахгүй болох даалгавар</p>
@@ -413,7 +374,6 @@ export default function StudentDashboard() {
                     )}
                   </div>
 
-                  {/* Recent grades */}
                   {gradedSubs.length > 0 && (
                     <div style={S.card}>
                       <p style={{ margin: "0 0 14px", fontWeight: 700, fontSize: 15, color: "#111827" }}>Сүүлийн үнэлгээ</p>
@@ -436,10 +396,7 @@ export default function StudentDashboard() {
                   )}
                 </div>
 
-                {/* Right column */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-                  {/* Progress bars */}
                   <div style={S.card}>
                     <p style={{ margin: "0 0 16px", fontWeight: 700, fontSize: 15, color: "#111827" }}>Хичээлийн явц</p>
                     {gradedSubs.length === 0 ? (
@@ -465,7 +422,6 @@ export default function StudentDashboard() {
                     )}
                   </div>
 
-                  {/* Tips */}
                   <div style={{ borderRadius: 16, padding: "20px", background: "linear-gradient(135deg,#06b6d4,#0891b2)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(255,255,255,0.8)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
@@ -480,7 +436,6 @@ export default function StudentDashboard() {
                     </ul>
                   </div>
 
-                  {/* Chat preview */}
                   <div style={S.card}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                       <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#111827" }}>Багш</p>
@@ -512,7 +467,6 @@ export default function StudentDashboard() {
             </div>
           )}
 
-          {/* ── ASSIGNMENTS ── */}
           {activeTab === "assignments" && (
             <div style={{ height: "100%", overflowY: "auto", padding: "24px 28px" }}>
               {assignments.length === 0 ? (
@@ -611,10 +565,8 @@ export default function StudentDashboard() {
             </div>
           )}
 
-          {/* ── CHAT ── */}
           {activeTab === "chat" && (
             <div style={{ height: "100%", display: "flex" }}>
-              {/* Left sidebar: Teacher list + AI button at bottom */}
               <div style={{ width: 220, borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", background: "white", flexShrink: 0 }}>
                 <div style={{ flex: 1, overflowY: "auto" }}>
                   <p style={{ margin: 0, padding: "14px 16px 10px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Багш нар</p>
@@ -638,12 +590,10 @@ export default function StudentDashboard() {
                     );
                   })}
                 </div>
-                {/* AI button pinned at bottom-left */}
                 <div style={{ padding: "10px 12px", borderTop: "1px solid #f1f5f9" }}>
                   <button onClick={() => setAiMode(true)}
                     style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, border: "none", cursor: "pointer",
-                      background: aiMode ? "linear-gradient(135deg,#7c3aed,#6d28d9)" : "linear-gradient(135deg,#f3f0ff,#ede9fe)",
-                      transition: "all 0.15s" }}>
+                      background: aiMode ? "linear-gradient(135deg,#7c3aed,#6d28d9)" : "linear-gradient(135deg,#f3f0ff,#ede9fe)" }}>
                     <div style={{ width: 34, height: 34, borderRadius: 10, background: aiMode ? "rgba(255,255,255,0.2)" : "#7c3aed", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
                     </div>
@@ -655,10 +605,8 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* Right: AI chat or Teacher chat */}
               {aiMode ? (
                 <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                  {/* AI header */}
                   <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f5f9", background: "white", flexShrink: 0, display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#7c3aed,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
@@ -672,18 +620,14 @@ export default function StudentDashboard() {
                       Цэвэрлэх
                     </button>
                   </div>
-                  {/* AI messages */}
                   <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
                     {aiMessages.length === 0 && (
                       <div style={{ textAlign: "center", marginTop: 40 }}>
-                        <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#7c3aed,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
-                          <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
-                        </div>
                         <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#374151" }}>AI Хичээлийн туслах</p>
                         <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Ойлгоогүй хичээлийнхээ талаар асуугаарай</p>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 16 }}>
                           {["2x + 5 = 13 бодлогыг хэрхэн бодох вэ?","Фотосинтез гэж юу вэ?","Дэлхийн 2-р дайн хэзээ дууссан вэ?","Хүндийн хүч гэж юу вэ?"].map(q => (
-                            <button key={q} onClick={() => { setAiInput(q); }}
+                            <button key={q} onClick={() => setAiInput(q)}
                               style={{ background: "#f3f0ff", border: "1px solid #ddd6fe", cursor: "pointer", color: "#6d28d9", fontSize: 12, padding: "6px 12px", borderRadius: 99, fontWeight: 500 }}>
                               {q}
                             </button>
@@ -693,11 +637,6 @@ export default function StudentDashboard() {
                     )}
                     {aiMessages.map((msg, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                        {msg.role === "assistant" && (
-                          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#7c3aed,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginRight: 8, marginTop: 2 }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
-                          </div>
-                        )}
                         <div style={{ maxWidth: 440, padding: "10px 16px", borderRadius: 18, fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap",
                           borderBottomRightRadius: msg.role === "user" ? 4 : 18,
                           borderBottomLeftRadius: msg.role === "user" ? 18 : 4,
@@ -710,17 +649,13 @@ export default function StudentDashboard() {
                     ))}
                     {aiSending && (
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#7c3aed,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13z"/></svg>
-                        </div>
                         <div style={{ background: "white", padding: "10px 16px", borderRadius: 18, borderBottomLeftRadius: 4, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", display: "flex", gap: 4, alignItems: "center" }}>
-                          {[0,1,2].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", animation: `bounce 1s ${i*0.2}s infinite` }} />)}
+                          {[0,1,2].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#8b5cf6", display: "inline-block" }} />)}
                         </div>
                       </div>
                     )}
                     <div ref={chatBottomRef} />
                   </div>
-                  {/* AI input */}
                   <form onSubmit={handleSendAi} style={{ padding: "14px 24px", borderTop: "1px solid #f1f5f9", display: "flex", gap: 10, background: "white", flexShrink: 0 }}>
                     <input type="text" placeholder="Хичээлийн талаар асуух..." value={aiInput}
                       onChange={e => setAiInput(e.target.value)} disabled={aiSending}
@@ -732,7 +667,6 @@ export default function StudentDashboard() {
                   </form>
                 </div>
               ) : (
-                /* Teacher chat */
                 <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                   {selectedTeacher && (
                     <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f5f9", background: "white", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
@@ -782,7 +716,6 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {/* SUBMIT MODAL */}
       {submitTarget && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.4)" }}>
           <div style={{ background: "white", borderRadius: 24, width: "100%", maxWidth: 480, padding: 32, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
@@ -806,12 +739,6 @@ export default function StudentDashboard() {
                   onClick={() => fileInputRef.current?.click()}>
                   {submitFile ? (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                      {submitFile.type.startsWith("image/") ? (
-                        <img src={URL.createObjectURL(submitFile)} alt="" style={{ height: 72, borderRadius: 8, objectFit: "contain" }}
-                          onLoad={e => URL.revokeObjectURL(e.target.src)} />
-                      ) : (
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="#06b6d4"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z"/></svg>
-                      )}
                       <div style={{ textAlign: "left" }}>
                         <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#111827" }}>{submitFile.name}</p>
                         <button type="button" onClick={e => { e.stopPropagation(); setSubmitFile(null); }}
@@ -822,7 +749,6 @@ export default function StudentDashboard() {
                     <>
                       <svg style={{ display: "block", margin: "0 auto 8px" }} width="28" height="28" viewBox="0 0 24 24" fill="#9ca3af"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
                       <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Зураг, файл хавсаргах</p>
-                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#d1d5db" }}>Товшиж файл сонгох</p>
                     </>
                   )}
                 </div>
@@ -845,8 +771,6 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      {/* ===== IMAGE LIGHTBOX ===== */}
-      {/* ===== CHAT NOTIFICATIONS ===== */}
       <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 200, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
         {chatNotifications.map(n => (
           <StudentChatToast key={n.nid} n={n} onClose={() => setChatNotifications(prev => prev.filter(x => x.nid !== n.nid))} />
