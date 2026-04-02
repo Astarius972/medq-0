@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowser } from "@/lib/supabase-browser";
 import { isPast, fmtDate, fmtDateTime, relTime } from "@/lib/formatters";
 
 const AVATAR_COLORS = ["#f97316","#06b6d4","#8b5cf6","#10b981","#f59e0b","#ef4444","#3b82f6","#ec4899"];
@@ -196,6 +197,41 @@ export default function TeacherDashboard() {
   useEffect(() => { studentsRef.current = students; }, [students]);
   useEffect(() => { selectedChatStudentRef.current = selectedChatStudent; }, [selectedChatStudent]);
   useEffect(() => { assignmentsRef.current = assignments; }, [assignments]);
+
+  // Realtime broadcast — суралцагчийн мессеж шуурхай хүлээн авах
+  useEffect(() => {
+    if (!user) return;
+    const tg = user.gmail.toLowerCase().trim();
+    const sb = getSupabaseBrowser();
+    const ch = sb.channel(`chat:${tg}`)
+      .on("broadcast", { event: "new_message" }, ({ payload }) => {
+        if (!payload?.id || payload.fromGmail === tg) return;
+        setAllChatMessages(prev => {
+          if (prev.find(m => m.id === payload.id)) return prev;
+          return [...prev, payload];
+        });
+        if (selectedChatStudentRef.current?.gmail === payload.fromGmail) {
+          setChatMessages(prev => {
+            if (prev.find(m => m.id === payload.id)) return prev;
+            return [...prev, payload].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt));
+          });
+        } else if (!seenMsgIds.current.has(payload.id)) {
+          seenMsgIds.current.add(payload.id);
+          const student = studentsRef.current.find(s => s.gmail === payload.fromGmail);
+          const nid = payload.id;
+          setChatNotifications(prev => [...prev, { nid, student, text: payload.text }]);
+          setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
+          if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+            new Notification("Анги платформ — Шинэ мессеж", {
+              body: `${student?.firstName || payload.fromGmail}: ${payload.text}`,
+              icon: "/favicon.ico",
+            });
+          }
+        }
+      })
+      .subscribe();
+    return () => sb.removeChannel(ch);
+  }, [user]);
 
   const loadAllSubmissions = useCallback((gmail) =>
     fetch(`/api/submissions?teacherGmail=${encodeURIComponent(gmail)}`).then(r => r.json()).then(d => d.submissions || [])

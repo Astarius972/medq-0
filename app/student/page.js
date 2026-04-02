@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowser } from "@/lib/supabase-browser";
 import { isPast, fmtDate, timeLeft, relTime } from "@/lib/formatters";
 
 function StudentChatToast({ n, onClose }) {
@@ -90,11 +91,13 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     if (!user || !selectedTeacherGmail) return;
+    const sg = user.gmail.toLowerCase().trim();
+    const tg = selectedTeacherGmail.toLowerCase().trim();
     const load = (isFirst) =>
-      fetch(`/api/chat?studentGmail=${encodeURIComponent(user.gmail)}&teacherGmail=${encodeURIComponent(selectedTeacherGmail)}`)
+      fetch(`/api/chat?studentGmail=${encodeURIComponent(sg)}&teacherGmail=${encodeURIComponent(tg)}`)
         .then(r => r.json()).then(d => {
           const msgs = d.messages || [];
-          const fresh = msgs.filter(m => !seenMsgIds.current.has(m.id) && m.fromGmail !== user.gmail);
+          const fresh = msgs.filter(m => !seenMsgIds.current.has(m.id) && m.fromGmail !== sg);
           fresh.forEach(m => {
             seenMsgIds.current.add(m.id);
             if (!isFirst) {
@@ -106,12 +109,33 @@ export default function StudentDashboard() {
               }
             }
           });
-          // Always sync the full message list so teacher's messages always appear
           setChatMessages(msgs);
         });
     load(true);
-    const iv = setInterval(() => load(false), 2000);
-    return () => clearInterval(iv);
+    const iv = setInterval(() => load(false), 4000);
+
+    // Realtime broadcast — шуурхай хүргэлт
+    const sb = getSupabaseBrowser();
+    const ch = sb.channel(`chat:${sg}`)
+      .on("broadcast", { event: "new_message" }, ({ payload }) => {
+        if (!payload?.id || payload.fromGmail !== tg) return;
+        setChatMessages(prev => {
+          if (prev.find(m => m.id === payload.id)) return prev;
+          if (!seenMsgIds.current.has(payload.id)) {
+            seenMsgIds.current.add(payload.id);
+            const nid = payload.id;
+            setChatNotifications(p => [...p, { nid, text: payload.text }]);
+            setTimeout(() => setChatNotifications(p => p.filter(n => n.nid !== nid)), 5000);
+            if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+              new Notification("Анги платформ — Шинэ мессеж", { body: payload.text, icon: "/favicon.ico" });
+            }
+          }
+          return [...prev, payload].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt));
+        });
+      })
+      .subscribe();
+
+    return () => { clearInterval(iv); sb.removeChannel(ch); };
   }, [user, selectedTeacherGmail]);
 
   useEffect(() => {

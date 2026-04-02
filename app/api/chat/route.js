@@ -62,6 +62,13 @@ export async function POST(request) {
     if (error || !data)
       return Response.json({ error: "Мессеж хадгалахад алдаа гарлаа: " + (error?.message || "unknown") }, { status: 500 });
 
+    // Broadcast to recipient's realtime channel for instant delivery
+    try {
+      const ch = supabase.channel(`chat:${data.to_gmail}`);
+      await ch.send({ type: "broadcast", event: "new_message", payload: toMsgJS(data) });
+      await supabase.removeChannel(ch);
+    } catch (_) { /* broadcast failure is non-critical */ }
+
     return Response.json({ message: toMsgJS(data) });
   } catch (err) {
     return Response.json({ error: "Серверийн алдаа: " + (err?.message || "unknown") }, { status: 500 });

@@ -129,7 +129,7 @@ export default function Home() {
             </svg>
           </div>
           <h1 className="text-5xl lg:text-6xl font-black text-gray-900 mb-4 text-center lg:text-left leading-tight">
-            Анги платформ<span style={{ color: "#06b6d4" }}>.</span>
+            EduBridge<span style={{ color: "#06b6d4" }}>.</span>
           </h1>
           <p className="text-gray-500 text-xl lg:text-2xl mb-10 max-w-sm text-center lg:text-left leading-relaxed">
             Багш сурагчийн харилцаа холбоог хялбаршуулсан орчин үеийн сургалтын систем
