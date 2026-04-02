@@ -98,6 +98,7 @@ export default function StudentDashboard() {
       fetch(`/api/chat?studentGmail=${encodeURIComponent(user.gmail)}&teacherGmail=${encodeURIComponent(selectedTeacherGmail)}`)
         .then(r => r.json()).then(d => {
           const msgs = d.messages || [];
+<<<<<<< HEAD
           const now = Date.now();
           const fresh = msgs.filter(m =>
             !seenMsgIds.current.has(m.id) &&
@@ -114,8 +115,36 @@ export default function StudentDashboard() {
         });
     poll();
     const iv = setInterval(poll, 3000);
+=======
+          if (isFirst) {
+            msgs.forEach(m => seenMsgIds.current.add(m.id));
+          } else {
+            const fresh = msgs.filter(m => !seenMsgIds.current.has(m.id) && m.fromGmail !== user.gmail);
+            fresh.forEach(m => {
+              seenMsgIds.current.add(m.id);
+              const nid = m.id;
+              setChatNotifications(prev => [...prev, { nid, text: m.text }]);
+              setTimeout(() => setChatNotifications(prev => prev.filter(n => n.nid !== nid)), 5000);
+              // Browser notification
+              if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+                new Notification("Анги платформ — Шинэ мессеж", { body: m.text, icon: "/favicon.ico" });
+              }
+            });
+            if (fresh.length) setChatMessages(msgs);
+          }
+        });
+    poll(true);
+    const iv = setInterval(() => poll(false), 2000);
+>>>>>>> 3861294500025a43c819e9e269e773d27be7c8e6
     return () => clearInterval(iv);
   }, [user, selectedTeacherGmail]);
+
+  // Browser notification permission
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
